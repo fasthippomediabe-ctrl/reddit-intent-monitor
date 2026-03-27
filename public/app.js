@@ -4,12 +4,25 @@ let soundEnabled = true;
 let previousCount = 0;
 let digestData = null;
 let autoRefreshInterval = null;
+let redditConnected = false;
+let redditUser = null;
 
 // --------------- Init ---------------
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   fetchResults();
   startAutoRefresh();
+  checkRedditLogin();
+
+  // Listen for OAuth popup callback
+  window.addEventListener('message', (e) => {
+    if (e.data?.type === 'reddit-auth') {
+      redditConnected = true;
+      redditUser = e.data.username;
+      updateRedditUI();
+      showToast(`Connected as u/${redditUser}`);
+    }
+  });
 
   document.getElementById('btn-settings').addEventListener('click', openSettings);
   document.getElementById('btn-copy-all').addEventListener('click', copyAll);
@@ -205,8 +218,18 @@ function renderResults(items) {
         ${(item.matchedKeywords || []).map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
+          ${item.thingId && redditConnected ? `<button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId)}')">Reply</button>` : ''}
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="btn btn-small btn-primary">Open</a>
         </div>
+      </div>
+      <div id="reply-${escapeHtml(item.thingId || '')}" class="reply-box hidden">
+        <textarea id="reply-text-${escapeHtml(item.thingId || '')}" placeholder="Write your reply... Be genuine and helpful." oninput="updateCharCount('${escapeHtml(item.thingId || '')}')"></textarea>
+        <div class="reply-actions">
+          <button class="btn btn-small btn-primary" onclick="submitReply('${escapeHtml(item.thingId || '')}', this)">Post Reply</button>
+          <button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId || '')}')">Cancel</button>
+          <span class="char-count" id="char-count-${escapeHtml(item.thingId || '')}">0 chars</span>
+        </div>
+        <div id="reply-status-${escapeHtml(item.thingId || '')}" class="reply-status"></div>
       </div>
     </div>
   `).join('');
@@ -343,6 +366,107 @@ function playNotification() {
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(fetchResults, 30000);
+}
+
+// --------------- Reddit Login & Reply ---------------
+async function checkRedditLogin() {
+  try {
+    const res = await fetch(`${API}/api/reddit-user`);
+    const data = await res.json();
+    redditConnected = data.loggedIn;
+    redditUser = data.username;
+    updateRedditUI();
+  } catch {}
+}
+
+function updateRedditUI() {
+  const btn = document.getElementById('btn-reddit-login');
+  const status = document.getElementById('reddit-user-status');
+
+  if (redditConnected && redditUser) {
+    btn.textContent = `u/${redditUser}`;
+    btn.classList.add('connected');
+    btn.onclick = logoutReddit;
+    status.textContent = '';
+  } else {
+    btn.textContent = 'Connect Reddit';
+    btn.classList.remove('connected');
+    btn.onclick = loginReddit;
+    status.textContent = '';
+  }
+}
+
+function loginReddit() {
+  const w = 600, h = 700;
+  const left = (screen.width - w) / 2;
+  const top = (screen.height - h) / 2;
+  window.open('/auth/reddit', 'RedditLogin', `width=${w},height=${h},left=${left},top=${top}`);
+}
+
+async function logoutReddit() {
+  if (!confirm('Disconnect Reddit account?')) return;
+  await fetch(`${API}/api/reddit-logout`, { method: 'POST' });
+  redditConnected = false;
+  redditUser = null;
+  updateRedditUI();
+  fetchResults(); // Re-render cards without reply buttons
+  showToast('Reddit disconnected');
+}
+
+function toggleReplyBox(thingId) {
+  const box = document.getElementById(`reply-${thingId}`);
+  if (box) box.classList.toggle('hidden');
+}
+
+function updateCharCount(thingId) {
+  const text = document.getElementById(`reply-text-${thingId}`);
+  const count = document.getElementById(`char-count-${thingId}`);
+  if (text && count) count.textContent = `${text.value.length} chars`;
+}
+
+async function submitReply(thingId, btn) {
+  const textarea = document.getElementById(`reply-text-${thingId}`);
+  const statusEl = document.getElementById(`reply-status-${thingId}`);
+  const text = textarea?.value?.trim();
+
+  if (!text) {
+    showToast('Write a reply first', true);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Posting...';
+  statusEl.textContent = '';
+
+  try {
+    const res = await fetch(`${API}/api/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thingId, text }),
+    });
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      statusEl.textContent = 'Reply posted!';
+      statusEl.className = 'reply-status success';
+      textarea.value = '';
+      updateCharCount(thingId);
+      showToast('Reply posted successfully');
+      // Auto-hide reply box after 2s
+      setTimeout(() => toggleReplyBox(thingId), 2000);
+    } else {
+      statusEl.textContent = data.error || 'Failed to post';
+      statusEl.className = 'reply-status error';
+      showToast(data.error || 'Reply failed', true);
+    }
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.className = 'reply-status error';
+    showToast('Reply error: ' + err.message, true);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Post Reply';
 }
 
 // --------------- Helpers ---------------

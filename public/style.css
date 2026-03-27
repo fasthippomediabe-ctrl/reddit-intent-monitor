@@ -442,6 +442,61 @@ body {
   transform: translateX(-50%) translateY(0);
 }
 
+/* --------------- Reddit Login Button --------------- */
+.btn-reddit {
+  background: #FF4500;
+  color: #fff;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-reddit:hover { background: #e03d00; }
+.btn-reddit.connected {
+  background: var(--green);
+  color: #1a1a1b;
+}
+
+/* --------------- Reply Box --------------- */
+.reply-box {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.reply-box textarea {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+}
+.reply-box textarea:focus { border-color: var(--accent); }
+.reply-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.reply-actions .char-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.reply-status {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.reply-status.success { color: var(--green); }
+.reply-status.error { color: var(--red); }
+
 .hidden { display: none !important; }
 
 /* --------------- Scrollbar --------------- */
