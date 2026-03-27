@@ -326,6 +326,7 @@ async function pollRSS() {
   }
 
   // Combine keywords into OR query (max ~5 per query to avoid too-long URLs)
+  // Short keywords (1-2 words) use plain search, longer phrases use quotes
   const keywordChunks = [];
   for (let i = 0; i < keywords.length; i += 5) {
     keywordChunks.push(keywords.slice(i, i + 5));
@@ -338,9 +339,9 @@ async function pollRSS() {
 
   for (const sub of subreddits) {
     for (const chunk of keywordChunks) {
-      // Combine keywords with OR for a single search
-      const query = chunk.map(kw => `"${kw}"`).join(' OR ');
-      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=25&t=week`;
+      // Use quotes only for multi-word phrases, plain for single words
+      const query = chunk.map(kw => kw.includes(' ') ? `(${kw})` : kw).join(' OR ');
+      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=month`;
 
       try {
         const response = await axios.get(jsonUrl, {
@@ -453,11 +454,11 @@ async function pollRedditAPI() {
 
   for (const sub of subreddits) {
     for (const chunk of keywordChunks) {
-      const query = chunk.map(kw => `"${kw}"`).join(' OR ');
+      const query = chunk.map(kw => kw.includes(' ') ? `(${kw})` : kw).join(' OR ');
 
       try {
         // Search posts
-        const url = `https://oauth.reddit.com/r/${sub.trim()}/search?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=25&t=week&type=link`;
+        const url = `https://oauth.reddit.com/r/${sub.trim()}/search?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=month&type=link`;
         const res = await axios.get(url, {
           headers: {
             Authorization: `Bearer ${token}`,
