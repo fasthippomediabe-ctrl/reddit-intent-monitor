@@ -355,19 +355,27 @@ body {
 
 /* Status Buttons */
 .status-btn {
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   color: var(--text-muted);
   cursor: pointer;
   text-transform: uppercase;
+  transition: all 0.15s;
 }
-.status-btn:hover { border-color: var(--fhm-blue); }
-.status-btn.active-replied { background: var(--green); color: #1a1a1b; border-color: var(--green); }
-.status-btn.active-rejected { background: var(--red); color: #fff; border-color: var(--red); }
+.qualified-btn:hover { border-color: var(--green); color: var(--green); }
+.unqualified-btn:hover { border-color: var(--red); color: var(--red); }
+.status-btn.active-qualified { background: var(--green); color: #1a1a1b; border-color: var(--green); }
+.status-btn.active-unqualified { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* Card states */
+.card-unqualified { opacity: 0.4; }
+.card-unqualified:hover { opacity: 0.7; }
+.card-replied { border-left: 3px solid var(--green) !important; }
+.card-replied .qualified-btn { background: var(--green); color: #1a1a1b; border-color: var(--green); }
 
 /* --------------- Settings Panel --------------- */
 .overlay {

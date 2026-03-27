@@ -252,27 +252,41 @@ async function clearResults() {
 }
 
 // --------------- Status Updates ---------------
-async function updateStatus(url, status, btn) {
+async function updateStatus(url, status) {
   try {
     await fetch(`${API}/api/update-status`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ url, status }),
     });
-
-    // Update button visuals
-    const card = btn.closest('.card-footer');
-    card.querySelectorAll('.status-btn').forEach(b => {
-      b.classList.remove('active-replied', 'active-rejected');
-    });
-
-    if (status === 'replied') btn.classList.add('active-replied');
-    if (status === 'rejected') btn.classList.add('active-rejected');
-
-    showToast(`Marked as ${status || 'cleared'}`);
   } catch (err) {
-    showToast('Error updating status', true);
+    console.error('Status update error:', err);
   }
+}
+
+function markQualified(thingId, url) {
+  // Open reply box — when they post, it auto-marks as "Replied" in sheets
+  handleReply(thingId, url);
+
+  // Highlight the card as qualified
+  const card = document.getElementById(`card-${CSS.escape(url)}`);
+  if (card) {
+    card.querySelector('.qualified-btn')?.classList.add('active-qualified');
+    card.querySelector('.unqualified-btn')?.classList.remove('active-unqualified');
+  }
+}
+
+function markUnqualified(url) {
+  updateStatus(url, 'Unqualified');
+
+  // Gray out the card
+  const card = document.getElementById(`card-${CSS.escape(url)}`);
+  if (card) {
+    card.classList.add('card-unqualified');
+    card.querySelector('.unqualified-btn')?.classList.add('active-unqualified');
+    card.querySelector('.qualified-btn')?.classList.remove('active-qualified');
+  }
+  showToast('Marked as Unqualified');
 }
 
 // --------------- Rendering ---------------
@@ -315,39 +329,41 @@ function renderResults(items) {
     return;
   }
 
-  feed.innerHTML = items.map(item => `
-    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''}">
+  feed.innerHTML = items.map(item => {
+    const safeUrl = escapeHtml(item.url);
+    const safeThingId = escapeHtml(item.thingId || '');
+    return `
+    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''}" id="card-${safeUrl}">
       <div class="card-header">
         <span class="sub-badge">r/${escapeHtml(item.subreddit)}</span>
         ${item.buyingSignal ? '<span class="signal-badge">Buying Signal</span>' : ''}
         ${item.type === 'comment' ? '<span class="comment-badge">Comment</span>' : ''}
-        <span class="card-meta">u/${escapeHtml(item.author)} &bull; ${escapeHtml(item.timeAgo)}</span>
+        <span class="card-meta">u/${escapeHtml(item.author)} &bull; ${escapeHtml(item.timeAgo)}${item.score ? ` &bull; ${item.score} pts` : ''}</span>
       </div>
       <div class="card-title">
-        <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        <a href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
       </div>
       ${item.snippet ? `<div class="card-snippet">${escapeHtml(item.snippet.slice(0, 200))}${item.snippet.length > 200 ? '...' : ''}</div>` : ''}
       <div class="card-footer">
         ${(item.matchedKeywords || []).map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
-        <button class="status-btn" onclick="updateStatus('${escapeHtml(item.url)}', 'replied', this)">Replied</button>
-        <button class="status-btn" onclick="updateStatus('${escapeHtml(item.url)}', 'rejected', this)">Rejected</button>
+        <button class="status-btn qualified-btn" onclick="markQualified('${safeThingId}', '${safeUrl}')">Qualified Lead</button>
+        <button class="status-btn unqualified-btn" onclick="markUnqualified('${safeUrl}')">Unqualified</button>
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
-          <button class="btn btn-small btn-secondary" onclick="handleReply('${escapeHtml(item.thingId || '')}')">Reply</button>
-          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
+          <a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>
-      <div id="reply-${escapeHtml(item.thingId || '')}" class="reply-box hidden">
-        <textarea id="reply-text-${escapeHtml(item.thingId || '')}" placeholder="Write your reply... Be genuine and helpful." oninput="updateCharCount('${escapeHtml(item.thingId || '')}')"></textarea>
+      <div id="reply-${safeThingId}" class="reply-box hidden" data-url="${safeUrl}">
+        <textarea id="reply-text-${safeThingId}" placeholder="Write your reply... Be genuine and helpful." oninput="updateCharCount('${safeThingId}')"></textarea>
         <div class="reply-actions">
-          <button class="btn btn-small btn-brand" onclick="submitReply('${escapeHtml(item.thingId || '')}', this)">Post Reply</button>
-          <button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId || '')}')">Cancel</button>
-          <span class="char-count" id="char-count-${escapeHtml(item.thingId || '')}">0 chars</span>
+          <button class="btn btn-small btn-brand" onclick="submitReply('${safeThingId}', this)">Post Reply</button>
+          <button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${safeThingId}')">Cancel</button>
+          <span class="char-count" id="char-count-${safeThingId}">0 chars</span>
         </div>
-        <div id="reply-status-${escapeHtml(item.thingId || '')}" class="reply-status"></div>
+        <div id="reply-status-${safeThingId}" class="reply-status"></div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 // --------------- Copy Functions ---------------
@@ -601,7 +617,7 @@ async function logoutReddit() {
   showToast('Reddit disconnected');
 }
 
-function handleReply(thingId) {
+function handleReply(thingId, url) {
   if (!redditConnected) {
     showConnectPrompt();
     return;
@@ -611,6 +627,8 @@ function handleReply(thingId) {
     return;
   }
   toggleReplyBox(thingId);
+  // Mark as Qualified in sheets immediately
+  if (url) updateStatus(url, 'Qualified');
 }
 
 function showConnectPrompt() {
@@ -681,7 +699,22 @@ async function submitReply(thingId, btn) {
       statusEl.className = 'reply-status success';
       textarea.value = '';
       updateCharCount(thingId);
-      showToast('Reply posted successfully');
+      showToast('Reply posted — marked as Replied in Sheets');
+
+      // Auto-update status to "Replied" in Google Sheets
+      const replyBox = document.getElementById(`reply-${thingId}`);
+      const postUrl = replyBox?.dataset?.url;
+      if (postUrl) {
+        updateStatus(postUrl, 'Replied');
+        // Update card visual
+        const card = document.getElementById(`card-${CSS.escape(postUrl)}`);
+        if (card) {
+          card.classList.add('card-replied');
+          const qBtn = card.querySelector('.qualified-btn');
+          if (qBtn) { qBtn.classList.add('active-qualified'); qBtn.textContent = 'Replied'; }
+        }
+      }
+
       setTimeout(() => toggleReplyBox(thingId), 2000);
     } else {
       statusEl.textContent = data.error || 'Failed to post';
