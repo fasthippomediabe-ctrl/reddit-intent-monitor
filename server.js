@@ -7,7 +7,13 @@ const RSSParser = require('rss-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const rssParser = new RSSParser();
+const rssParser = new RSSParser({
+  headers: {
+    'User-Agent': 'RedditIntentMonitor/1.0 (Node.js RSS Reader)',
+    'Accept': 'application/rss+xml, application/xml, text/xml',
+  },
+  timeout: 15000,
+});
 
 app.use(cors());
 app.use(express.json());
@@ -79,54 +85,93 @@ function timeAgo(dateStr) {
 
 // --------------- RSS Mode ---------------
 
+async function fetchRSSFeed(url) {
+  // Try rss-parser first
+  try {
+    return await rssParser.parseURL(url);
+  } catch (err) {
+    console.log(`[RSS] rss-parser failed, trying axios fallback: ${err.message}`);
+  }
+
+  // Fallback: fetch with axios and parse
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'RedditIntentMonitor/1.0 (Node.js RSS Reader)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 15000,
+    });
+    return await rssParser.parseString(response.data);
+  } catch (err) {
+    throw new Error(`Both RSS methods failed: ${err.message}`);
+  }
+}
+
 async function pollRSS() {
   const { subreddits, keywords } = monitorConfig;
-  if (!subreddits.length || !keywords.length) return;
+  if (!subreddits.length || !keywords.length) {
+    console.log('[RSS] Skipped — no subreddits or keywords configured');
+    lastChecked = new Date().toISOString();
+    return;
+  }
 
+  console.log(`[RSS] Starting poll: ${subreddits.length} subs x ${keywords.length} keywords`);
   const newItems = [];
+  let errors = 0;
 
   for (const sub of subreddits) {
     for (const keyword of keywords) {
-      const url = `https://www.reddit.com/r/${sub.trim()}/search.rss?q=${encodeURIComponent(keyword.trim())}&sort=new&restrict_sr=on&limit=25`;
+      // Use Reddit JSON API instead of RSS (more reliable)
+      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(keyword.trim())}&sort=new&restrict_sr=on&limit=25`;
       try {
-        const feed = await rssParser.parseURL(url);
-        for (const entry of feed.items) {
-          const title = entry.title || '';
-          const snippet = (entry.contentSnippet || entry.content || '').replace(/<[^>]*>/g, '').slice(0, 300);
+        const response = await axios.get(jsonUrl, {
+          headers: {
+            'User-Agent': 'RedditIntentMonitor/1.0 (Node.js; lead monitoring tool)',
+          },
+          timeout: 15000,
+        });
+
+        const posts = response.data?.data?.children || [];
+        console.log(`[RSS] r/${sub} "${keyword}" — ${posts.length} posts found`);
+
+        for (const child of posts) {
+          const post = child.data;
+          const title = post.title || '';
+          const snippet = (post.selftext || '').slice(0, 300);
           const combined = `${title} ${snippet}`;
+          const postUrl = `https://www.reddit.com${post.permalink}`;
 
-          if (matchesKeywords(combined, keywords)) {
-            // Extract thing_id from Reddit URL (e.g., /comments/abc123/)
-            const redditId = (entry.link || '').match(/\/comments\/([a-z0-9]+)/i);
-            const thingId = redditId ? `t3_${redditId[1]}` : null;
-
-            newItems.push({
-              id: entry.link || `${sub}-${Date.now()}-${Math.random()}`,
-              thingId,
-              subreddit: sub.trim(),
-              title,
-              author: entry.creator || entry.author || 'unknown',
-              url: entry.link || '',
-              snippet,
-              date: entry.isoDate || entry.pubDate || new Date().toISOString(),
-              timeAgo: timeAgo(entry.isoDate || entry.pubDate || new Date().toISOString()),
-              buyingSignal: hasBuyingSignal(combined),
-              matchedKeywords: keywords.filter(kw => combined.toLowerCase().includes(kw.toLowerCase())),
-              source: 'rss',
-              type: 'post',
-            });
-          }
+          newItems.push({
+            id: post.permalink || post.id,
+            thingId: post.name || `t3_${post.id}`,
+            subreddit: sub.trim(),
+            title,
+            author: post.author || 'unknown',
+            url: postUrl,
+            snippet,
+            date: new Date((post.created_utc || 0) * 1000).toISOString(),
+            timeAgo: timeAgo(new Date((post.created_utc || 0) * 1000).toISOString()),
+            buyingSignal: hasBuyingSignal(combined),
+            matchedKeywords: keywords.filter(kw => combined.toLowerCase().includes(kw.toLowerCase())),
+            source: 'rss',
+            type: 'post',
+            score: post.score || 0,
+            numComments: post.num_comments || 0,
+          });
         }
       } catch (err) {
-        console.error(`RSS error [r/${sub} "${keyword}"]: ${err.message}`);
+        errors++;
+        console.error(`[RSS] Error r/${sub} "${keyword}": ${err.message}`);
       }
+
+      // Delay between requests to respect rate limits
+      await new Promise(r => setTimeout(r, 2000));
     }
-    // Small delay between subreddits to be polite
-    await new Promise(r => setTimeout(r, 1000));
   }
 
   const added = addResults(newItems);
-  console.log(`[RSS] Polled ${subreddits.length} subs x ${keywords.length} keywords — ${added} new results`);
+  console.log(`[RSS] Done — ${newItems.length} total, ${added} new, ${errors} errors`);
 }
 
 // --------------- Reddit API Mode ---------------
