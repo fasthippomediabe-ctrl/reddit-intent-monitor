@@ -470,6 +470,16 @@ app.post('/api/digest', (req, res) => {
   res.json({ subjectLine, html, plain, resultCount: items.length });
 });
 
+// Catch-all: return JSON 404 for any unmatched API route
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Serve index.html for all other routes (SPA fallback)
+app.get('*', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+
 // --------------- Start Server ---------------
 
 app.listen(PORT, () => {

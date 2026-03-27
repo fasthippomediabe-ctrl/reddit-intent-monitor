@@ -65,7 +65,7 @@ async function saveAndStart() {
 
   try {
     // Update settings
-    await fetch(`${API}/api/settings`, {
+    const settingsRes = await fetch(`${API}/api/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -76,12 +76,18 @@ async function saveAndStart() {
       }),
     });
 
+    if (!settingsRes.ok) {
+      const text = await settingsRes.text();
+      showToast('Settings error: ' + text, true);
+      return;
+    }
+
     // Start monitoring
     const startRes = await fetch(`${API}/api/start`, { method: 'POST' });
-    const startData = await startRes.json();
+    const startData = await startRes.json().catch(() => ({ error: 'Server error' }));
 
-    if (startData.error) {
-      showToast(startData.error, true);
+    if (!startRes.ok || startData.error) {
+      showToast(startData.error || 'Failed to start', true);
       return;
     }
 
