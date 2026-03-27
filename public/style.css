@@ -376,6 +376,7 @@ body {
 .card-unqualified:hover { opacity: 0.7; }
 .card-replied { border-left: 3px solid var(--green) !important; }
 .card-replied .qualified-btn { background: var(--green); color: #1a1a1b; border-color: var(--green); }
+.card-qualified { border-left: 3px solid var(--blue) !important; }
 
 /* --------------- Settings Panel --------------- */
 .overlay {

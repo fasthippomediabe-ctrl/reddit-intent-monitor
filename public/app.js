@@ -343,7 +343,7 @@ function renderResults(items) {
     const safeUrl = escapeHtml(item.url);
     const safeThingId = escapeHtml(item.thingId || '');
     return `
-    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''}" id="card-${safeUrl}">
+    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''} ${item.leadStatus?.status === 'Replied' ? 'card-replied' : ''} ${item.leadStatus?.status === 'Qualified' ? 'card-qualified' : ''}" id="card-${safeUrl}">
       <div class="card-header">
         <span class="sub-badge">r/${escapeHtml(item.subreddit)}</span>
         ${item.buyingSignal ? '<span class="signal-badge">Buying Signal</span>' : ''}
@@ -356,11 +356,16 @@ function renderResults(items) {
       ${item.snippet ? `<div class="card-snippet">${escapeHtml(item.snippet.slice(0, 200))}${item.snippet.length > 200 ? '...' : ''}</div>` : ''}
       <div class="card-footer">
         ${(item.matchedKeywords || []).map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
-        <button class="status-btn qualified-btn" onclick="markQualified('${safeThingId}', '${safeUrl}')">Qualified Lead</button>
-        <button class="status-btn unqualified-btn" onclick="markUnqualified('${safeUrl}')">Unqualified</button>
+        ${item.leadStatus?.status === 'Replied'
+          ? `<span class="status-btn active-qualified">Replied by ${escapeHtml(item.leadStatus.updatedBy)}</span>`
+          : item.leadStatus?.status === 'Qualified'
+            ? `<span class="status-btn active-qualified">Qualified by ${escapeHtml(item.leadStatus.updatedBy)}</span>`
+            : `<button class="status-btn qualified-btn" onclick="markQualified('${safeThingId}', '${safeUrl}')">Qualified Lead</button>`
+        }
+        ${!item.leadStatus ? `<button class="status-btn unqualified-btn" onclick="markUnqualified('${safeUrl}')">Unqualified</button>` : ''}
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
-          <button class="btn btn-small btn-secondary reply-btn" onclick="handleReply('${safeThingId}', '${safeUrl}')">Reply</button>
+          ${item.leadStatus?.status !== 'Replied' ? `<button class="btn btn-small btn-secondary reply-btn" onclick="handleReply('${safeThingId}', '${safeUrl}')">Reply</button>` : ''}
           <a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>

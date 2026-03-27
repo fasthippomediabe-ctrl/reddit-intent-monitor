@@ -28,6 +28,10 @@ let userRefreshToken = null;
 let userTokenExpiresAt = 0;
 let redditUsername = null;
 
+// Lead status tracking (shared across all users)
+// key: url, value: { status: 'Qualified'|'Replied'|'Unqualified', updatedBy: username, updatedAt: timestamp }
+const leadStatuses = new Map();
+
 // Current monitoring config
 let monitorConfig = {
   subreddits: [],
@@ -596,12 +600,24 @@ app.get('/api/check-auth', (req, res) => {
 // --------------- Status Update (Replied/Rejected) ---------------
 
 app.post('/api/update-status', authMiddleware, async (req, res) => {
-  const { url, status } = req.body; // status: 'replied', 'rejected', ''
-  if (!url || !['replied', 'rejected', ''].includes(status)) {
+  const { url, status } = req.body;
+  const validStatuses = ['Qualified', 'Replied', 'Unqualified', ''];
+  if (!url || !validStatuses.includes(status)) {
     return res.status(400).json({ error: 'Invalid url or status' });
   }
 
-  // Update in Google Sheets
+  // Store in memory (shared across all users)
+  if (status) {
+    leadStatuses.set(url, {
+      status,
+      updatedBy: req.user?.name || req.user?.username || 'unknown',
+      updatedAt: new Date().toISOString(),
+    });
+  } else {
+    leadStatuses.delete(url);
+  }
+
+  // Update in Google Sheets (background)
   if (SPREADSHEET_ID) {
     const sheets = await getSheetsClient();
     if (sheets) {
@@ -613,12 +629,11 @@ app.post('/api/update-status', authMiddleware, async (req, res) => {
         const rows = data.data.values || [];
         for (let i = 0; i < rows.length; i++) {
           if (rows[i][0] === url) {
-            // Column K (index 6 from E) = Replied column
             await sheets.spreadsheets.values.update({
               spreadsheetId: SPREADSHEET_ID,
               range: `Results!K${i + 1}`,
               valueInputOption: 'RAW',
-              requestBody: { values: [[status]] },
+              requestBody: { values: [[`${status} by ${req.user?.name || 'unknown'}`]] },
             });
             break;
           }
@@ -657,7 +672,13 @@ app.get('/api/results', (req, res) => {
     filtered = filtered.filter(r => r.buyingSignal);
   }
 
-  filtered = filtered.map(r => ({ ...r, timeAgo: timeAgo(r.date) }));
+  // Attach lead statuses and filter out Unqualified
+  filtered = filtered
+    .map(r => {
+      const ls = leadStatuses.get(r.url);
+      return { ...r, timeAgo: timeAgo(r.date), leadStatus: ls || null };
+    })
+    .filter(r => !r.leadStatus || r.leadStatus.status !== 'Unqualified');
 
   res.json({
     results: filtered,
