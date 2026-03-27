@@ -3,127 +3,219 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reddit Intent Monitor</title>
+  <title>Reddit Lead Monitor | Fast Hippo Media</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="header-left">
-      <div class="logo">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="#FF4500"><circle cx="12" cy="12" r="12"/><path d="M18.5 12a1.5 1.5 0 0 0-2.56-1.06 7.35 7.35 0 0 0-3.94-1.2l.67-3.15 2.18.46a1.07 1.07 0 1 0 .12-.52l-2.44-.52a.27.27 0 0 0-.32.2l-.75 3.53a7.4 7.4 0 0 0-4 1.2A1.5 1.5 0 1 0 5.94 13a2.95 2.95 0 0 0 0 .44c0 2.24 2.61 4.06 5.83 4.06s5.83-1.82 5.83-4.06a3 3 0 0 0 0-.44 1.5 1.5 0 0 0 .9-1.5zM9 13.07a1.07 1.07 0 1 1 0 2.14 1.07 1.07 0 0 1 0-2.14zm6.14 2.88a3.6 3.6 0 0 1-2.27.68 3.6 3.6 0 0 1-2.27-.68.23.23 0 0 1 .32-.32 3.2 3.2 0 0 0 1.95.57 3.2 3.2 0 0 0 1.95-.57.23.23 0 0 1 .32.32zm-.18-1.81a1.07 1.07 0 1 1 0-2.14 1.07 1.07 0 0 1 0 2.14z" fill="#fff"/></svg>
-        <h1>Reddit Intent Monitor</h1>
-      </div>
-      <div class="status-bar">
-        <span id="status-badge" class="badge badge-stopped">Stopped</span>
-        <span id="mode-badge" class="badge badge-mode">RSS</span>
-        <span id="result-count" class="meta">0 results</span>
-        <span id="last-checked" class="meta">Never checked</span>
-      </div>
-    </div>
-    <div class="header-right">
-      <button id="sound-toggle" class="btn btn-icon" title="Toggle sound notifications">
-        <svg id="sound-on-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-        <svg id="sound-off-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-      </button>
-      <span id="reddit-user-status" class="meta"></span>
-      <button id="btn-reddit-login" class="btn btn-reddit" onclick="loginReddit()">Connect Reddit</button>
-      <button id="btn-copy-all" class="btn btn-secondary">Copy All</button>
-      <button id="btn-digest" class="btn btn-secondary">Generate Digest</button>
-      <button id="btn-settings" class="btn btn-primary">Settings</button>
-    </div>
-  </header>
 
-  <!-- Filter Bar -->
-  <div class="filter-bar">
-    <input type="text" id="filter-subreddit" placeholder="Filter by subreddit..." class="input-field">
-    <input type="text" id="filter-keyword" placeholder="Filter by keyword..." class="input-field">
-    <label class="checkbox-label">
-      <input type="checkbox" id="filter-buying-signal">
-      <span>Buying signals only</span>
-    </label>
-    <button id="btn-refresh" class="btn btn-small">Refresh Now</button>
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="hippo-icon">&#129435;</span>
+        <h1>Fast Hippo Media</h1>
+        <p>Reddit Lead Monitor</p>
+      </div>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <input type="text" id="login-user" class="input-field" placeholder="Username" required>
+        <input type="password" id="login-pass" class="input-field" placeholder="Password" required style="margin-top:10px;">
+        <button type="submit" class="btn btn-brand btn-full" style="margin-top:14px;">Login</button>
+        <div id="login-error" class="login-error"></div>
+      </form>
+    </div>
   </div>
 
-  <!-- Results Feed -->
-  <main id="results-feed" class="feed">
-    <div class="empty-state">
-      <svg viewBox="0 0 24 24" width="48" height="48" fill="#818384"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-      <p>Configure your subreddits and keywords, then start monitoring.</p>
-      <button onclick="openSettings()" class="btn btn-primary">Open Settings</button>
-    </div>
-  </main>
+  <!-- Main App (hidden until login) -->
+  <div id="app" class="hidden">
 
-  <!-- Settings Panel -->
-  <div id="settings-overlay" class="overlay hidden" onclick="closeSettings()"></div>
-  <aside id="settings-panel" class="settings-panel hidden">
-    <div class="settings-header">
-      <h2>Settings</h2>
-      <button onclick="closeSettings()" class="btn-close">&times;</button>
-    </div>
-    <div class="settings-body">
-      <div class="setting-group">
-        <label>Mode</label>
-        <div class="mode-toggle">
-          <button id="mode-rss" class="mode-btn active" onclick="setMode('rss')">RSS (Free)</button>
-          <button id="mode-api" class="mode-btn" onclick="setMode('api')">Reddit API</button>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo">
+          <span class="hippo-icon-sm">&#129435;</span>
+          <div>
+            <h1>Reddit Lead Monitor</h1>
+            <span class="brand-sub">by Fast Hippo Media</span>
+          </div>
+        </div>
+        <div class="status-bar">
+          <span id="status-badge" class="badge badge-stopped">Stopped</span>
+          <span id="mode-badge" class="badge badge-mode">RSS</span>
+          <span id="result-count" class="meta">0 results</span>
+          <span id="last-checked" class="meta">Never checked</span>
         </div>
       </div>
-
-      <div class="setting-group">
-        <label>Subreddits <span class="hint">(comma separated, no r/)</span></label>
-        <textarea id="setting-subreddits" class="input-field" rows="3" placeholder="entrepreneur, SaaS, smallbusiness, startups"></textarea>
+      <div class="header-right">
+        <button id="sound-toggle" class="btn btn-icon" title="Toggle sound notifications">
+          <svg id="sound-on-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <svg id="sound-off-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        </button>
+        <span id="reddit-user-status" class="meta"></span>
+        <button id="btn-reddit-login" class="btn btn-reddit" onclick="loginReddit()">Connect Reddit</button>
+        <button id="btn-copy-all" class="btn btn-secondary">Copy All</button>
+        <button id="btn-digest" class="btn btn-secondary">Generate Digest</button>
+        <button id="btn-how-to" class="btn btn-secondary" onclick="openHowTo()">How to Use</button>
+        <button id="btn-settings" class="btn btn-brand">Settings</button>
+        <div class="user-menu">
+          <span id="logged-in-user" class="meta"></span>
+          <button id="btn-logout" class="btn btn-small btn-secondary" onclick="handleLogout()">Logout</button>
+        </div>
       </div>
+    </header>
 
-      <div class="setting-group">
-        <label>Keywords <span class="hint">(comma separated)</span></label>
-        <textarea id="setting-keywords" class="input-field" rows="3" placeholder="looking for, recommend, best tool, need help"></textarea>
+    <!-- Quick Links Bar -->
+    <div class="quick-links">
+      <a id="sheets-link" href="#" target="_blank" class="quick-link">View Lead History (Google Sheets)</a>
+      <a href="https://fasthippomedia.com" target="_blank" class="quick-link">fasthippomedia.com</a>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <input type="text" id="filter-subreddit" placeholder="Filter by subreddit..." class="input-field">
+      <input type="text" id="filter-keyword" placeholder="Filter by keyword..." class="input-field">
+      <label class="checkbox-label">
+        <input type="checkbox" id="filter-buying-signal">
+        <span>Buying signals only</span>
+      </label>
+      <button id="btn-refresh" class="btn btn-small">Refresh Now</button>
+    </div>
+
+    <!-- Results Feed -->
+    <main id="results-feed" class="feed">
+      <div class="empty-state">
+        <span style="font-size:48px;">&#129435;</span>
+        <p>Configure your subreddits and keywords, then start monitoring.</p>
+        <button onclick="openSettings()" class="btn btn-brand">Open Settings</button>
       </div>
+    </main>
 
-      <div class="setting-group">
-        <label>Poll Interval (minutes)</label>
-        <input type="number" id="setting-poll" class="input-field" min="1" max="60" value="5">
+    <!-- Footer -->
+    <footer class="fhm-footer">
+      <strong>&#129435; Fast Hippo Media</strong> — Award Winning Digital Marketing Agency<br>
+      <a href="https://fasthippomedia.com" target="_blank">fasthippomedia.com</a>
+    </footer>
+
+    <!-- Settings Panel -->
+    <div id="settings-overlay" class="overlay hidden" onclick="closeSettings()"></div>
+    <aside id="settings-panel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button onclick="closeSettings()" class="btn-close">&times;</button>
       </div>
-
-      <div id="api-settings" class="setting-group hidden">
-        <label>Reddit API Credentials</label>
-        <input type="text" id="setting-client-id" class="input-field" placeholder="Client ID">
-        <input type="password" id="setting-client-secret" class="input-field" placeholder="Client Secret" style="margin-top:8px;">
-        <input type="text" id="setting-user-agent" class="input-field" placeholder="User Agent" style="margin-top:8px;">
-        <button id="btn-test-connection" class="btn btn-small" style="margin-top:10px;" onclick="testConnection()">Test Connection</button>
-        <span id="connection-status" class="meta"></span>
+      <div class="settings-body">
+        <div class="setting-group">
+          <label>Mode</label>
+          <div class="mode-toggle">
+            <button id="mode-rss" class="mode-btn active" onclick="setMode('rss')">RSS (Free)</button>
+            <button id="mode-api" class="mode-btn" onclick="setMode('api')">Reddit API</button>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label>Subreddits <span class="hint">(comma separated, no r/)</span></label>
+          <textarea id="setting-subreddits" class="input-field" rows="3" placeholder="entrepreneur, SaaS, smallbusiness, startups"></textarea>
+        </div>
+        <div class="setting-group">
+          <label>Keywords <span class="hint">(comma separated)</span></label>
+          <textarea id="setting-keywords" class="input-field" rows="3" placeholder="looking for, recommend, best tool, need help"></textarea>
+        </div>
+        <div class="setting-group">
+          <label>Poll Interval (minutes)</label>
+          <input type="number" id="setting-poll" class="input-field" min="1" max="60" value="5">
+        </div>
+        <div id="api-settings" class="setting-group hidden">
+          <label>Reddit API Credentials</label>
+          <input type="text" id="setting-client-id" class="input-field" placeholder="Client ID">
+          <input type="password" id="setting-client-secret" class="input-field" placeholder="Client Secret" style="margin-top:8px;">
+          <input type="text" id="setting-user-agent" class="input-field" placeholder="User Agent" style="margin-top:8px;">
+          <button id="btn-test-connection" class="btn btn-small" style="margin-top:10px;" onclick="testConnection()">Test Connection</button>
+          <span id="connection-status" class="meta"></span>
+        </div>
+        <div class="setting-actions">
+          <button class="btn btn-brand btn-full" onclick="saveAndStart()">Save & Start Monitoring</button>
+          <button class="btn btn-danger btn-full" onclick="stopMonitoring()">Stop Monitoring</button>
+          <button class="btn btn-secondary btn-full" onclick="clearResults()">Clear Results</button>
+        </div>
       </div>
+    </aside>
 
-      <div class="setting-actions">
-        <button id="btn-save-start" class="btn btn-primary btn-full" onclick="saveAndStart()">Save & Start Monitoring</button>
-        <button id="btn-stop" class="btn btn-danger btn-full" onclick="stopMonitoring()">Stop Monitoring</button>
-        <button id="btn-clear" class="btn btn-secondary btn-full" onclick="clearResults()">Clear Results</button>
+    <!-- Digest Modal -->
+    <div id="digest-overlay" class="overlay hidden" onclick="closeDigest()"></div>
+    <div id="digest-modal" class="modal hidden">
+      <div class="modal-header">
+        <h2>Email Digest</h2>
+        <button onclick="closeDigest()" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="digest-options">
+          <label class="checkbox-label">
+            <input type="checkbox" id="digest-buying-only">
+            <span>Buying signals only</span>
+          </label>
+          <button class="btn btn-small" onclick="generateDigest()">Regenerate</button>
+        </div>
+        <div id="digest-subject" class="digest-subject"></div>
+        <div id="digest-preview" class="digest-preview"></div>
+        <div class="digest-actions">
+          <button class="btn btn-brand" onclick="copyDigestHTML()">Copy HTML</button>
+          <button class="btn btn-secondary" onclick="copyDigestPlain()">Copy Plain Text</button>
+        </div>
       </div>
     </div>
-  </aside>
 
-  <!-- Digest Modal -->
-  <div id="digest-overlay" class="overlay hidden" onclick="closeDigest()"></div>
-  <div id="digest-modal" class="modal hidden">
-    <div class="modal-header">
-      <h2>Email Digest</h2>
-      <button onclick="closeDigest()" class="btn-close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="digest-options">
-        <label class="checkbox-label">
-          <input type="checkbox" id="digest-buying-only">
-          <span>Buying signals only</span>
-        </label>
-        <button class="btn btn-small" onclick="generateDigest()">Regenerate</button>
+    <!-- How To Use Modal -->
+    <div id="howto-overlay" class="overlay hidden" onclick="closeHowTo()"></div>
+    <div id="howto-modal" class="modal hidden">
+      <div class="modal-header">
+        <h2>&#129435; How to Use — Reddit Lead Monitor</h2>
+        <button onclick="closeHowTo()" class="btn-close">&times;</button>
       </div>
-      <div id="digest-subject" class="digest-subject"></div>
-      <div id="digest-preview" class="digest-preview"></div>
-      <div class="digest-actions">
-        <button class="btn btn-primary" onclick="copyDigestHTML()">Copy HTML</button>
-        <button class="btn btn-secondary" onclick="copyDigestPlain()">Copy Plain Text</button>
+      <div class="modal-body howto-body">
+        <h3>Quick Start</h3>
+        <ol>
+          <li>Click <strong>Settings</strong> (top right)</li>
+          <li>Enter subreddits (e.g. <code>smallbusiness, entrepreneur, SEO</code>)</li>
+          <li>Enter keywords (e.g. <code>looking for agency, need SEO help, need website</code>)</li>
+          <li>Click <strong>Save & Start Monitoring</strong></li>
+          <li>Results appear in the feed — check for <strong>Buying Signal</strong> badges</li>
+        </ol>
+
+        <h3>Understanding Results</h3>
+        <ul>
+          <li><strong>Buying Signal</strong> (orange badge) = high-intent post, someone actively looking for help</li>
+          <li><strong>Open</strong> = go to the Reddit post</li>
+          <li><strong>Reply</strong> = respond directly (requires Reddit account connected)</li>
+          <li><strong>Copy</strong> = copy post details to clipboard</li>
+          <li><strong>Mark Status</strong> = mark as Replied or Rejected (saves to Google Sheets)</li>
+        </ul>
+
+        <h3>How to Reply Effectively</h3>
+        <p>When you see a buying signal post:</p>
+        <ol>
+          <li>Read the full post by clicking <strong>Open</strong></li>
+          <li>Write a <strong>genuine, helpful</strong> comment — give free value first</li>
+          <li>Mention you can help further via DM</li>
+          <li>Mark as <strong>Replied</strong> to track in Google Sheets</li>
+        </ol>
+
+        <h3>Example Reply Template</h3>
+        <div class="template-box">
+          "I run a digital marketing agency and we work with a lot of [their industry] businesses. The biggest quick wins I'd suggest are [specific advice]. We've helped similar businesses [result]. Happy to take a look for free if you want — just DM me."
+        </div>
+
+        <h3>Features</h3>
+        <ul>
+          <li><strong>Generate Digest</strong> — create email-ready summary of today's leads</li>
+          <li><strong>Google Sheets</strong> — all results auto-save, track replied/rejected status</li>
+          <li><strong>Sound alerts</strong> — get pinged when new results arrive</li>
+          <li><strong>Auto-refresh</strong> — feed updates every 30 seconds</li>
+        </ul>
+
+        <div style="text-align:center; margin-top:20px;">
+          <button class="btn btn-brand" onclick="downloadInstructions()">Download Full Instructions</button>
+        </div>
       </div>
     </div>
+
   </div>
 
   <!-- Toast -->

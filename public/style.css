@@ -14,6 +14,8 @@
   --green: #46d160;
   --red: #ff585b;
   --blue: #4fbcff;
+  --fhm-blue: #0C34CA;
+  --fhm-navy: #03045E;
 }
 
 body {
@@ -24,14 +26,57 @@ body {
   min-height: 100vh;
 }
 
+/* --------------- Login Screen --------------- */
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--fhm-navy) 0%, var(--fhm-blue) 50%, var(--bg) 100%);
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+  width: 380px;
+  max-width: 90vw;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.login-brand h1 {
+  color: var(--text);
+  font-size: 22px;
+  margin-top: 8px;
+}
+.login-brand p {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.hippo-icon { font-size: 48px; }
+.hippo-icon-sm { font-size: 28px; }
+
+.login-error {
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 10px;
+  text-align: center;
+}
+
 /* --------------- Header --------------- */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  background: var(--fhm-navy);
+  border-bottom: 2px solid var(--fhm-blue);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -48,10 +93,26 @@ body {
   gap: 10px;
 }
 .logo h1 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--text);
+  color: #fff;
   white-space: nowrap;
+  margin: 0;
+  line-height: 1.2;
+}
+.brand-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255,255,255,0.2);
 }
 
 .status-bar {
@@ -71,12 +132,29 @@ body {
 }
 .badge-stopped { background: var(--red); color: #fff; }
 .badge-running { background: var(--green); color: #1a1a1b; }
-.badge-mode { background: var(--accent); color: #fff; }
+.badge-mode { background: var(--fhm-blue); color: #fff; }
 
 .meta {
   font-size: 12px;
   color: var(--text-muted);
 }
+.header .meta { color: rgba(255,255,255,0.6); }
+
+/* --------------- Quick Links --------------- */
+.quick-links {
+  display: flex;
+  gap: 16px;
+  padding: 8px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.quick-link {
+  font-size: 12px;
+  color: var(--fhm-blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+.quick-link:hover { color: var(--accent); text-decoration: underline; }
 
 /* --------------- Buttons --------------- */
 .btn {
@@ -92,6 +170,9 @@ body {
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
 
+.btn-brand { background: var(--fhm-blue); color: #fff; }
+.btn-brand:hover { background: var(--fhm-navy); }
+
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-hover); }
 
@@ -105,8 +186,8 @@ body {
 
 .btn-icon {
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.6);
   padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -153,7 +234,7 @@ body {
   transition: border-color 0.15s;
   width: 100%;
 }
-.input-field:focus { border-color: var(--accent); }
+.input-field:focus { border-color: var(--fhm-blue); }
 .filter-bar .input-field { width: 200px; }
 
 .checkbox-label {
@@ -165,7 +246,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
-.checkbox-label input[type="checkbox"] { accent-color: var(--accent); }
+.checkbox-label input[type="checkbox"] { accent-color: var(--fhm-blue); }
 
 /* --------------- Feed --------------- */
 .feed {
@@ -179,8 +260,7 @@ body {
   padding: 80px 20px;
   color: var(--text-muted);
 }
-.empty-state svg { margin-bottom: 16px; opacity: 0.5; }
-.empty-state p { margin-bottom: 20px; font-size: 15px; }
+.empty-state p { margin: 16px 0 20px; font-size: 15px; }
 
 /* --------------- Result Card --------------- */
 .result-card {
@@ -192,7 +272,6 @@ body {
   transition: border-color 0.15s;
 }
 .result-card:hover { border-color: #4a4a4c; }
-
 .result-card.buying-signal { border-left: 3px solid var(--accent); }
 
 .card-header {
@@ -204,7 +283,7 @@ body {
 }
 
 .sub-badge {
-  background: var(--accent);
+  background: var(--fhm-blue);
   color: #fff;
   padding: 2px 8px;
   border-radius: 10px;
@@ -259,13 +338,13 @@ body {
 .card-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .keyword-tag {
-  background: #ff450015;
-  color: var(--accent);
+  background: #0C34CA15;
+  color: var(--fhm-blue);
   padding: 1px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -273,6 +352,22 @@ body {
 }
 
 .card-actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* Status Buttons */
+.status-btn {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.status-btn:hover { border-color: var(--fhm-blue); }
+.status-btn.active-replied { background: var(--green); color: #1a1a1b; border-color: var(--green); }
+.status-btn.active-rejected { background: var(--red); color: #fff; border-color: var(--red); }
 
 /* --------------- Settings Panel --------------- */
 .overlay {
@@ -344,7 +439,7 @@ body {
   cursor: pointer;
   transition: all 0.15s;
 }
-.mode-btn.active { background: var(--accent); color: #fff; }
+.mode-btn.active { background: var(--fhm-blue); color: #fff; }
 .mode-btn:hover:not(.active) { background: var(--bg-elevated); }
 
 .setting-actions {
@@ -402,7 +497,7 @@ body {
   background: var(--bg-input);
   border-radius: 6px;
   margin-bottom: 12px;
-  color: var(--accent);
+  color: var(--fhm-blue);
 }
 
 .digest-preview {
@@ -419,6 +514,55 @@ body {
   gap: 8px;
 }
 
+/* --------------- How To Use --------------- */
+.howto-body h3 {
+  color: var(--fhm-blue);
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+.howto-body h3:first-child { margin-top: 0; }
+.howto-body ol, .howto-body ul {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+.howto-body li {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.howto-body code {
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.template-box {
+  background: var(--bg-input);
+  border-left: 3px solid var(--fhm-blue);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 10px 0;
+}
+
+/* --------------- Footer --------------- */
+.fhm-footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 2px solid var(--fhm-blue);
+  margin-top: 3rem;
+}
+.fhm-footer a {
+  color: var(--fhm-blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+
 /* --------------- Toast --------------- */
 .toast {
   position: fixed;
@@ -431,7 +575,7 @@ body {
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--fhm-blue);
   opacity: 0;
   transition: all 0.3s;
   z-index: 500;
@@ -454,10 +598,7 @@ body {
   cursor: pointer;
 }
 .btn-reddit:hover { background: #e03d00; }
-.btn-reddit.connected {
-  background: var(--green);
-  color: #1a1a1b;
-}
+.btn-reddit.connected { background: var(--green); color: #1a1a1b; }
 
 /* --------------- Reply Box --------------- */
 .reply-box {
@@ -478,7 +619,7 @@ body {
   min-height: 80px;
   outline: none;
 }
-.reply-box textarea:focus { border-color: var(--accent); }
+.reply-box textarea:focus { border-color: var(--fhm-blue); }
 .reply-actions {
   display: flex;
   align-items: center;
@@ -490,10 +631,7 @@ body {
   color: var(--text-muted);
   margin-left: auto;
 }
-.reply-status {
-  font-size: 12px;
-  margin-top: 6px;
-}
+.reply-status { font-size: 12px; margin-top: 6px; }
 .reply-status.success { color: var(--green); }
 .reply-status.error { color: var(--red); }
 
@@ -512,4 +650,5 @@ body {
   .filter-bar .input-field { width: 100%; }
   .feed { padding: 16px; }
   .settings-panel { width: 100%; }
+  .quick-links { flex-wrap: wrap; padding: 6px 16px; }
 }

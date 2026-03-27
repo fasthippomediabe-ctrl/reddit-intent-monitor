@@ -536,6 +536,99 @@ function stopPolling() {
   console.log('[Monitor] Stopped polling');
 }
 
+// --------------- Team Login ---------------
+
+const TEAM_USERS = {
+  boss: { password: 'leadfinder123', role: 'admin', name: 'Boss' },
+  bryan: { password: 'bryan2024', role: 'admin', name: 'Bryan' },
+  user1: { password: 'user1pass', role: 'user', name: 'Team Member 1' },
+  user2: { password: 'user2pass', role: 'user', name: 'Team Member 2' },
+};
+
+// Simple token store (in production, use JWT)
+const activeSessions = new Map();
+
+function generateToken() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+function authMiddleware(req, res, next) {
+  const token = req.headers['x-auth-token'];
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  req.user = activeSessions.get(token);
+  next();
+}
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = TEAM_USERS[username];
+
+  if (!user || user.password !== password) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  const token = generateToken();
+  activeSessions.set(token, { username, role: user.role, name: user.name });
+
+  res.json({ ok: true, token, username, role: user.role, name: user.name });
+});
+
+app.post('/api/logout', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  if (token) activeSessions.delete(token);
+  res.json({ ok: true });
+});
+
+app.get('/api/check-auth', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  if (!token || !activeSessions.has(token)) {
+    return res.json({ authenticated: false });
+  }
+  const user = activeSessions.get(token);
+  res.json({ authenticated: true, ...user });
+});
+
+// --------------- Status Update (Replied/Rejected) ---------------
+
+app.post('/api/update-status', authMiddleware, async (req, res) => {
+  const { url, status } = req.body; // status: 'replied', 'rejected', ''
+  if (!url || !['replied', 'rejected', ''].includes(status)) {
+    return res.status(400).json({ error: 'Invalid url or status' });
+  }
+
+  // Update in Google Sheets
+  if (SPREADSHEET_ID) {
+    const sheets = await getSheetsClient();
+    if (sheets) {
+      try {
+        const data = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: 'Results!E:K',
+        });
+        const rows = data.data.values || [];
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i][0] === url) {
+            // Column K (index 6 from E) = Replied column
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `Results!K${i + 1}`,
+              valueInputOption: 'RAW',
+              requestBody: { values: [[status]] },
+            });
+            break;
+          }
+        }
+      } catch (err) {
+        console.error('[Sheets] Status update error:', err.message);
+      }
+    }
+  }
+
+  res.json({ ok: true });
+});
+
 // --------------- API Routes ---------------
 
 // Health check (for UptimeRobot)
@@ -570,6 +663,7 @@ app.get('/api/results', (req, res) => {
     activeMode,
     isRunning: !!cronJob,
     sheetsConnected: !!SPREADSHEET_ID,
+    sheetsUrl: SPREADSHEET_ID ? `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/` : null,
     config: {
       subreddits: monitorConfig.subreddits,
       keywords: monitorConfig.keywords,

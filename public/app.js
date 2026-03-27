@@ -6,15 +6,98 @@ let digestData = null;
 let autoRefreshInterval = null;
 let redditConnected = false;
 let redditUser = null;
+let authToken = null;
+
+// --------------- Auth ---------------
+function getHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (authToken) h['x-auth-token'] = authToken;
+  return h;
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const errorEl = document.getElementById('login-error');
+
+  try {
+    const res = await fetch(`${API}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      errorEl.textContent = data.error || 'Login failed';
+      return;
+    }
+
+    authToken = data.token;
+    localStorage.setItem('rim-token', data.token);
+    localStorage.setItem('rim-user', JSON.stringify({ username: data.username, role: data.role, name: data.name }));
+    showApp(data);
+  } catch (err) {
+    errorEl.textContent = 'Connection error';
+  }
+}
+
+async function checkAuth() {
+  const savedToken = localStorage.getItem('rim-token');
+  if (!savedToken) return false;
+
+  try {
+    const res = await fetch(`${API}/api/check-auth`, {
+      headers: { 'x-auth-token': savedToken },
+    });
+    const data = await res.json();
+    if (data.authenticated) {
+      authToken = savedToken;
+      showApp(data);
+      return true;
+    }
+  } catch {}
+
+  localStorage.removeItem('rim-token');
+  localStorage.removeItem('rim-user');
+  return false;
+}
+
+function showApp(user) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('logged-in-user').textContent = user.name || user.username;
+  initApp();
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${API}/api/logout`, { method: 'POST', headers: getHeaders() });
+  } catch {}
+  authToken = null;
+  localStorage.removeItem('rim-token');
+  localStorage.removeItem('rim-user');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+}
 
 // --------------- Init ---------------
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const loggedIn = await checkAuth();
+  if (!loggedIn) {
+    document.getElementById('login-screen').classList.remove('hidden');
+  }
+});
+
+function initApp() {
   loadSettings();
   fetchResults();
   startAutoRefresh();
   checkRedditLogin();
+  updateSheetsLink();
 
-  // Listen for OAuth popup callback
   window.addEventListener('message', (e) => {
     if (e.data?.type === 'reddit-auth') {
       redditConnected = true;
@@ -33,14 +116,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('filter-subreddit').addEventListener('input', fetchResults);
   document.getElementById('filter-keyword').addEventListener('input', fetchResults);
   document.getElementById('filter-buying-signal').addEventListener('change', fetchResults);
-});
+}
+
+function updateSheetsLink() {
+  // Try to get spreadsheet ID from results endpoint
+  fetch(`${API}/api/results?` + new URLSearchParams()).then(r => r.json()).then(data => {
+    if (data.sheetsConnected) {
+      // The link will be updated when we know the ID
+    }
+  }).catch(() => {});
+}
 
 // --------------- API Calls ---------------
 async function fetchResults() {
   const params = new URLSearchParams();
-  const subFilter = document.getElementById('filter-subreddit').value.trim();
-  const kwFilter = document.getElementById('filter-keyword').value.trim();
-  const bsOnly = document.getElementById('filter-buying-signal').checked;
+  const subFilter = document.getElementById('filter-subreddit')?.value?.trim();
+  const kwFilter = document.getElementById('filter-keyword')?.value?.trim();
+  const bsOnly = document.getElementById('filter-buying-signal')?.checked;
 
   if (subFilter) params.set('subreddit', subFilter);
   if (kwFilter) params.set('keyword', kwFilter);
@@ -52,7 +144,6 @@ async function fetchResults() {
 
     updateHeader(data);
 
-    // Sound notification for new results
     if (data.total > previousCount && previousCount > 0 && soundEnabled) {
       playNotification();
     }
@@ -70,17 +161,15 @@ async function saveAndStart() {
   const pollMinutes = document.getElementById('setting-poll').value;
   const mode = document.querySelector('.mode-btn.active').id === 'mode-api' ? 'api' : 'rss';
 
-  // Save to localStorage
   localStorage.setItem('rim-subreddits', subreddits);
   localStorage.setItem('rim-keywords', keywords);
   localStorage.setItem('rim-poll', pollMinutes);
   localStorage.setItem('rim-mode', mode);
 
   try {
-    // Update settings
     const settingsRes = await fetch(`${API}/api/settings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({
         subreddits: subreddits.split(',').map(s => s.trim()).filter(Boolean),
         keywords: keywords.split(',').map(k => k.trim()).filter(Boolean),
@@ -95,7 +184,6 @@ async function saveAndStart() {
       return;
     }
 
-    // Start monitoring
     const startRes = await fetch(`${API}/api/start`, { method: 'POST' });
     const startData = await startRes.json().catch(() => ({ error: 'Server error' }));
 
@@ -147,14 +235,8 @@ async function testConnection() {
   try {
     const res = await fetch(`${API}/api/test-connection`, { method: 'POST' });
     const data = await res.json();
-
-    if (data.ok) {
-      status.textContent = data.message;
-      status.style.color = 'var(--green)';
-    } else {
-      status.textContent = data.error || 'Connection failed';
-      status.style.color = 'var(--red)';
-    }
+    status.textContent = data.ok ? data.message : (data.error || 'Failed');
+    status.style.color = data.ok ? 'var(--green)' : 'var(--red)';
   } catch (err) {
     status.textContent = 'Error: ' + err.message;
     status.style.color = 'var(--red)';
@@ -169,6 +251,30 @@ async function clearResults() {
   showToast('Results cleared');
 }
 
+// --------------- Status Updates ---------------
+async function updateStatus(url, status, btn) {
+  try {
+    await fetch(`${API}/api/update-status`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ url, status }),
+    });
+
+    // Update button visuals
+    const card = btn.closest('.card-footer');
+    card.querySelectorAll('.status-btn').forEach(b => {
+      b.classList.remove('active-replied', 'active-rejected');
+    });
+
+    if (status === 'replied') btn.classList.add('active-replied');
+    if (status === 'rejected') btn.classList.add('active-rejected');
+
+    showToast(`Marked as ${status || 'cleared'}`);
+  } catch (err) {
+    showToast('Error updating status', true);
+  }
+}
+
 // --------------- Rendering ---------------
 function updateHeader(data) {
   const statusBadge = document.getElementById('status-badge');
@@ -178,14 +284,21 @@ function updateHeader(data) {
 
   statusBadge.textContent = data.isRunning ? 'Running' : 'Stopped';
   statusBadge.className = `badge ${data.isRunning ? 'badge-running' : 'badge-stopped'}`;
-
   modeBadge.textContent = (data.activeMode || 'rss').toUpperCase();
-
   resultCount.textContent = `${data.total} result${data.total !== 1 ? 's' : ''}`;
 
   if (data.lastChecked) {
     const d = new Date(data.lastChecked);
     lastChecked.textContent = `Last checked: ${d.toLocaleTimeString()}`;
+  }
+
+  // Update sheets link if connected
+  const sheetsLink = document.getElementById('sheets-link');
+  if (data.sheetsUrl) {
+    sheetsLink.href = data.sheetsUrl;
+    sheetsLink.style.display = '';
+  } else {
+    sheetsLink.style.display = 'none';
   }
 }
 
@@ -195,9 +308,9 @@ function renderResults(items) {
   if (!items || items.length === 0) {
     feed.innerHTML = `
       <div class="empty-state">
-        <svg viewBox="0 0 24 24" width="48" height="48" fill="#818384"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <span style="font-size:48px;">&#129435;</span>
         <p>No results yet. Configure your subreddits and keywords, then start monitoring.</p>
-        <button onclick="openSettings()" class="btn btn-primary">Open Settings</button>
+        <button onclick="openSettings()" class="btn btn-brand">Open Settings</button>
       </div>`;
     return;
   }
@@ -216,16 +329,18 @@ function renderResults(items) {
       ${item.snippet ? `<div class="card-snippet">${escapeHtml(item.snippet.slice(0, 200))}${item.snippet.length > 200 ? '...' : ''}</div>` : ''}
       <div class="card-footer">
         ${(item.matchedKeywords || []).map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
+        <button class="status-btn" onclick="updateStatus('${escapeHtml(item.url)}', 'replied', this)">Replied</button>
+        <button class="status-btn" onclick="updateStatus('${escapeHtml(item.url)}', 'rejected', this)">Rejected</button>
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
           ${item.thingId && redditConnected ? `<button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId)}')">Reply</button>` : ''}
-          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="btn btn-small btn-primary">Open</a>
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>
       <div id="reply-${escapeHtml(item.thingId || '')}" class="reply-box hidden">
         <textarea id="reply-text-${escapeHtml(item.thingId || '')}" placeholder="Write your reply... Be genuine and helpful." oninput="updateCharCount('${escapeHtml(item.thingId || '')}')"></textarea>
         <div class="reply-actions">
-          <button class="btn btn-small btn-primary" onclick="submitReply('${escapeHtml(item.thingId || '')}', this)">Post Reply</button>
+          <button class="btn btn-small btn-brand" onclick="submitReply('${escapeHtml(item.thingId || '')}', this)">Post Reply</button>
           <button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId || '')}')">Cancel</button>
           <span class="char-count" id="char-count-${escapeHtml(item.thingId || '')}">0 chars</span>
         </div>
@@ -247,10 +362,7 @@ function copyResult(btn, item) {
 
 function copyAll() {
   const cards = document.querySelectorAll('.result-card');
-  if (cards.length === 0) {
-    showToast('No results to copy');
-    return;
-  }
+  if (cards.length === 0) { showToast('No results to copy'); return; }
 
   const lines = [];
   cards.forEach(card => {
@@ -262,7 +374,7 @@ function copyAll() {
   });
 
   navigator.clipboard.writeText(lines.join('\n')).then(() => {
-    showToast(`Copied ${lines.length} results to clipboard`);
+    showToast(`Copied ${lines.length} results`);
   });
 }
 
@@ -280,7 +392,6 @@ function closeDigest() {
 
 async function generateDigest() {
   const buyingOnly = document.getElementById('digest-buying-only').checked;
-
   try {
     const res = await fetch(`${API}/api/digest`, {
       method: 'POST',
@@ -288,7 +399,6 @@ async function generateDigest() {
       body: JSON.stringify({ buyingSignalOnly: buyingOnly }),
     });
     digestData = await res.json();
-
     document.getElementById('digest-subject').textContent = `Subject: ${digestData.subjectLine}`;
     document.getElementById('digest-preview').innerHTML = digestData.html;
   } catch (err) {
@@ -298,16 +408,102 @@ async function generateDigest() {
 
 function copyDigestHTML() {
   if (!digestData) return;
-  navigator.clipboard.writeText(digestData.html).then(() => {
-    showToast('HTML copied to clipboard');
-  });
+  navigator.clipboard.writeText(digestData.html).then(() => showToast('HTML copied'));
 }
 
 function copyDigestPlain() {
   if (!digestData) return;
-  navigator.clipboard.writeText(digestData.plain).then(() => {
-    showToast('Plain text copied to clipboard');
-  });
+  navigator.clipboard.writeText(digestData.plain).then(() => showToast('Plain text copied'));
+}
+
+// --------------- How To Use ---------------
+function openHowTo() {
+  document.getElementById('howto-overlay').classList.remove('hidden');
+  document.getElementById('howto-modal').classList.remove('hidden');
+}
+
+function closeHowTo() {
+  document.getElementById('howto-overlay').classList.add('hidden');
+  document.getElementById('howto-modal').classList.add('hidden');
+}
+
+function downloadInstructions() {
+  const text = `==========================================================
+    REDDIT LEAD MONITOR - User Guide
+    Powered by Fast Hippo Media
+    https://fasthippomedia.com
+==========================================================
+
+OVERVIEW
+--------
+Reddit Lead Monitor scans Reddit in real-time for posts
+where people are actively looking for marketing, SEO,
+web design, and other services your agency offers.
+
+STEP 1: Login
+-------------
+Use your team credentials to log in.
+
+STEP 2: Configure Settings
+--------------------------
+- Click "Settings" in the top right
+- Enter subreddits (e.g. smallbusiness, entrepreneur, SEO)
+- Enter keywords (e.g. looking for agency, need SEO help)
+- Set poll interval (default: 5 minutes)
+- Click "Save & Start Monitoring"
+
+STEP 3: Monitor Results
+-----------------------
+- Results appear in the feed, newest first
+- "Buying Signal" badge = high-intent post
+- Click "Open" to view the Reddit post
+- Click "Reply" to respond directly (requires Reddit account)
+- Click "Replied" or "Rejected" to track status
+
+STEP 4: Reply Effectively
+--------------------------
+1. Read the full post
+2. Write a genuine, helpful comment
+3. Mention you can help further via DM
+4. Mark as "Replied" in the dashboard
+
+EXAMPLE REPLY:
+"I run a digital marketing agency and we work with a lot
+of [their industry] businesses. The biggest quick wins I'd
+suggest are [specific advice]. Happy to take a look for
+free if you want - just DM me."
+
+FEATURES
+--------
+- Buying signal detection (25+ intent phrases)
+- Google Sheets integration (auto-saves all results)
+- Email digest generator
+- Sound notifications
+- Copy to clipboard
+- Status tracking (Replied/Rejected)
+- Reddit account integration for direct replies
+
+TIPS
+----
+- Focus on "Buying Signal" posts first
+- Reply during US business hours (8am-8pm EST)
+- Be helpful first, promotional second
+- Follow Reddit's 90/10 rule (90% helpful, 10% promo)
+- Check the Google Sheets link for full history
+
+==========================================================
+  Fast Hippo Media | fasthippomedia.com
+  Award Winning Digital Marketing Agency
+==========================================================`;
+
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'FastHippoMedia_Reddit_Lead_Monitor_Guide.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Instructions downloaded');
 }
 
 // --------------- Settings Panel ---------------
@@ -325,8 +521,6 @@ function setMode(mode) {
   document.getElementById('mode-rss').classList.toggle('active', mode === 'rss');
   document.getElementById('mode-api').classList.toggle('active', mode === 'api');
   document.getElementById('api-settings').classList.toggle('hidden', mode !== 'api');
-
-  // Update poll interval default
   const pollInput = document.getElementById('setting-poll');
   if (mode === 'api' && pollInput.value === '5') pollInput.value = '3';
   if (mode === 'rss' && pollInput.value === '3') pollInput.value = '5';
@@ -337,7 +531,6 @@ function loadSettings() {
   const kws = localStorage.getItem('rim-keywords');
   const poll = localStorage.getItem('rim-poll');
   const mode = localStorage.getItem('rim-mode');
-
   if (subs) document.getElementById('setting-subreddits').value = subs;
   if (kws) document.getElementById('setting-keywords').value = kws;
   if (poll) document.getElementById('setting-poll').value = poll;
@@ -347,10 +540,9 @@ function loadSettings() {
 // --------------- Sound ---------------
 function toggleSound() {
   soundEnabled = !soundEnabled;
-  const btn = document.getElementById('sound-toggle');
   document.getElementById('sound-on-icon').style.display = soundEnabled ? '' : 'none';
   document.getElementById('sound-off-icon').style.display = soundEnabled ? 'none' : '';
-  btn.classList.toggle('active', soundEnabled);
+  document.getElementById('sound-toggle').classList.toggle('active', soundEnabled);
   showToast(soundEnabled ? 'Sound on' : 'Sound off');
 }
 
@@ -381,18 +573,14 @@ async function checkRedditLogin() {
 
 function updateRedditUI() {
   const btn = document.getElementById('btn-reddit-login');
-  const status = document.getElementById('reddit-user-status');
-
   if (redditConnected && redditUser) {
     btn.textContent = `u/${redditUser}`;
     btn.classList.add('connected');
     btn.onclick = logoutReddit;
-    status.textContent = '';
   } else {
     btn.textContent = 'Connect Reddit';
     btn.classList.remove('connected');
     btn.onclick = loginReddit;
-    status.textContent = '';
   }
 }
 
@@ -409,7 +597,7 @@ async function logoutReddit() {
   redditConnected = false;
   redditUser = null;
   updateRedditUI();
-  fetchResults(); // Re-render cards without reply buttons
+  fetchResults();
   showToast('Reddit disconnected');
 }
 
@@ -429,10 +617,7 @@ async function submitReply(thingId, btn) {
   const statusEl = document.getElementById(`reply-status-${thingId}`);
   const text = textarea?.value?.trim();
 
-  if (!text) {
-    showToast('Write a reply first', true);
-    return;
-  }
+  if (!text) { showToast('Write a reply first', true); return; }
 
   btn.disabled = true;
   btn.textContent = 'Posting...';
@@ -441,7 +626,7 @@ async function submitReply(thingId, btn) {
   try {
     const res = await fetch(`${API}/api/reply`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ thingId, text }),
     });
     const data = await res.json();
@@ -452,7 +637,6 @@ async function submitReply(thingId, btn) {
       textarea.value = '';
       updateCharCount(thingId);
       showToast('Reply posted successfully');
-      // Auto-hide reply box after 2s
       setTimeout(() => toggleReplyBox(thingId), 2000);
     } else {
       statusEl.textContent = data.error || 'Failed to post';
@@ -462,7 +646,6 @@ async function submitReply(thingId, btn) {
   } catch (err) {
     statusEl.textContent = 'Error: ' + err.message;
     statusEl.className = 'reply-status error';
-    showToast('Reply error: ' + err.message, true);
   }
 
   btn.disabled = false;
@@ -484,10 +667,9 @@ function escapeAttr(str) {
 function showToast(message, isError = false) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
-  toast.style.borderColor = isError ? 'var(--red)' : 'var(--accent)';
+  toast.style.borderColor = isError ? 'var(--red)' : 'var(--fhm-blue)';
   toast.classList.remove('hidden');
   toast.classList.add('show');
-
   setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => toast.classList.add('hidden'), 300);
