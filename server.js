@@ -3,17 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
 const axios = require('axios');
-const RSSParser = require('rss-parser');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const rssParser = new RSSParser({
-  headers: {
-    'User-Agent': 'RedditIntentMonitor/1.0 (Node.js RSS Reader)',
-    'Accept': 'application/rss+xml, application/xml, text/xml',
-  },
-  timeout: 15000,
-});
 
 app.use(cors());
 app.use(express.json());
@@ -21,10 +14,10 @@ app.use(express.static('public'));
 
 // --------------- In-Memory Store ---------------
 
-const MAX_RESULTS = 200;
+const MAX_RESULTS = 500;
 let results = [];
 let lastChecked = null;
-let activeMode = 'rss'; // 'rss' or 'api'
+let activeMode = 'rss';
 let cronJob = null;
 let redditAccessToken = null;
 let tokenExpiresAt = 0;
@@ -35,7 +28,7 @@ let userRefreshToken = null;
 let userTokenExpiresAt = 0;
 let redditUsername = null;
 
-// Current monitoring config (set via /api/settings)
+// Current monitoring config
 let monitorConfig = {
   subreddits: [],
   keywords: [],
@@ -50,7 +43,241 @@ const BUYING_SIGNALS = [
   'worth it', 'compared to', 'vs', 'better than', 'moving from',
   'replacement for', 'budget for', 'paying for', 'shopping for',
   'in the market', 'searching for', 'need a', 'want a',
+  'hire', 'hiring', 'looking to hire', 'agency',
 ];
+
+// --------------- Google Sheets ---------------
+
+const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID || '';
+
+function getGoogleAuth() {
+  try {
+    const credsJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (!credsJson) return null;
+    const creds = JSON.parse(credsJson);
+    const auth = new google.auth.GoogleAuth({
+      credentials: creds,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    return auth;
+  } catch (err) {
+    console.error('[Sheets] Auth error:', err.message);
+    return null;
+  }
+}
+
+async function getSheetsClient() {
+  const auth = getGoogleAuth();
+  if (!auth) return null;
+  return google.sheets({ version: 'v4', auth });
+}
+
+async function saveToSheets(newItems) {
+  if (!SPREADSHEET_ID || !newItems.length) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    // Check if "Results" sheet exists, create if not
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const sheetNames = spreadsheet.data.sheets.map(s => s.properties.title);
+
+    if (!sheetNames.includes('Results')) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: 'Results' } } }],
+        },
+      });
+      // Add header row
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Results!A1:K1',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [['Timestamp', 'Subreddit', 'Title', 'Author', 'URL', 'Snippet', 'Buying Signal', 'Keywords', 'Score', 'Comments', 'Replied']],
+        },
+      });
+    }
+
+    // Get existing URLs to avoid duplicates
+    let existingUrls = new Set();
+    try {
+      const existing = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Results!E:E',
+      });
+      if (existing.data.values) {
+        existingUrls = new Set(existing.data.values.flat());
+      }
+    } catch {}
+
+    // Filter out duplicates
+    const uniqueItems = newItems.filter(item => !existingUrls.has(item.url));
+    if (!uniqueItems.length) {
+      console.log('[Sheets] No new unique items to save');
+      return;
+    }
+
+    // Append new rows
+    const rows = uniqueItems.map(item => [
+      new Date(item.date).toLocaleString('en-US', { timeZone: 'America/Chicago' }),
+      `r/${item.subreddit}`,
+      item.title,
+      `u/${item.author}`,
+      item.url,
+      (item.snippet || '').slice(0, 200),
+      item.buyingSignal ? 'YES' : '',
+      (item.matchedKeywords || []).join(', '),
+      item.score || 0,
+      item.numComments || 0,
+      '',
+    ]);
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Results!A:K',
+      valueInputOption: 'RAW',
+      requestBody: { values: rows },
+    });
+
+    console.log(`[Sheets] Saved ${rows.length} new results`);
+  } catch (err) {
+    console.error('[Sheets] Save error:', err.message);
+  }
+}
+
+async function loadFromSheets() {
+  if (!SPREADSHEET_ID) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Results!A:K',
+    });
+
+    const rows = res.data.values;
+    if (!rows || rows.length <= 1) return;
+
+    const header = rows[0];
+    const loaded = [];
+
+    for (let i = rows.length - 1; i >= 1 && loaded.length < MAX_RESULTS; i--) {
+      const row = rows[i];
+      const title = row[2] || '';
+      const snippet = row[5] || '';
+      const combined = `${title} ${snippet}`;
+
+      loaded.push({
+        id: row[4] || `sheet-${i}`,
+        thingId: null,
+        subreddit: (row[1] || '').replace('r/', ''),
+        title,
+        author: (row[3] || '').replace('u/', ''),
+        url: row[4] || '',
+        snippet,
+        date: new Date(row[0] || Date.now()).toISOString(),
+        timeAgo: '',
+        buyingSignal: row[6] === 'YES',
+        matchedKeywords: (row[7] || '').split(', ').filter(Boolean),
+        source: 'sheets',
+        type: 'post',
+        score: parseInt(row[8]) || 0,
+        numComments: parseInt(row[9]) || 0,
+      });
+    }
+
+    if (loaded.length) {
+      // Merge with in-memory, avoiding duplicates
+      const existingUrls = new Set(results.map(r => r.url));
+      const newFromSheets = loaded.filter(r => !existingUrls.has(r.url));
+      results = [...results, ...newFromSheets].slice(0, MAX_RESULTS);
+      console.log(`[Sheets] Loaded ${newFromSheets.length} results from history`);
+    }
+  } catch (err) {
+    console.error('[Sheets] Load error:', err.message);
+  }
+}
+
+async function saveConfigToSheets() {
+  if (!SPREADSHEET_ID) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const sheetNames = spreadsheet.data.sheets.map(s => s.properties.title);
+
+    if (!sheetNames.includes('Config')) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: 'Config' } } }],
+        },
+      });
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Config!A1:B4',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [
+          ['subreddits', monitorConfig.subreddits.join(', ')],
+          ['keywords', monitorConfig.keywords.join(', ')],
+          ['pollMinutes', monitorConfig.pollMinutes],
+          ['mode', monitorConfig.mode],
+        ],
+      },
+    });
+    console.log('[Sheets] Config saved');
+  } catch (err) {
+    console.error('[Sheets] Config save error:', err.message);
+  }
+}
+
+async function loadConfigFromSheets() {
+  if (!SPREADSHEET_ID) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Config!A1:B4',
+    });
+
+    const rows = res.data.values;
+    if (!rows) return;
+
+    for (const [key, value] of rows) {
+      if (key === 'subreddits' && value) {
+        monitorConfig.subreddits = value.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (key === 'keywords' && value) {
+        monitorConfig.keywords = value.split(',').map(k => k.trim()).filter(Boolean);
+      }
+      if (key === 'pollMinutes' && value) {
+        monitorConfig.pollMinutes = parseInt(value) || 5;
+      }
+      if (key === 'mode' && value) {
+        monitorConfig.mode = value;
+      }
+    }
+
+    console.log(`[Sheets] Config loaded: ${monitorConfig.subreddits.length} subs, ${monitorConfig.keywords.length} keywords`);
+
+    // Auto-start if config was loaded
+    if (monitorConfig.subreddits.length && monitorConfig.keywords.length) {
+      console.log('[Sheets] Auto-starting monitoring from saved config');
+      startPolling();
+    }
+  } catch (err) {
+    console.error('[Sheets] Config load error:', err.message);
+  }
+}
 
 // --------------- Helpers ---------------
 
@@ -65,11 +292,16 @@ function matchesKeywords(text, keywords) {
 }
 
 function addResults(newItems) {
-  // Deduplicate by URL
   const existingUrls = new Set(results.map(r => r.url));
   const unique = newItems.filter(item => !existingUrls.has(item.url));
   results = [...unique, ...results].slice(0, MAX_RESULTS);
   lastChecked = new Date().toISOString();
+
+  // Save new items to Google Sheets in background
+  if (unique.length) {
+    saveToSheets(unique).catch(err => console.error('[Sheets] Background save error:', err.message));
+  }
+
   return unique.length;
 }
 
@@ -83,30 +315,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-// --------------- RSS Mode ---------------
-
-async function fetchRSSFeed(url) {
-  // Try rss-parser first
-  try {
-    return await rssParser.parseURL(url);
-  } catch (err) {
-    console.log(`[RSS] rss-parser failed, trying axios fallback: ${err.message}`);
-  }
-
-  // Fallback: fetch with axios and parse
-  try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'RedditIntentMonitor/1.0 (Node.js RSS Reader)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-      timeout: 15000,
-    });
-    return await rssParser.parseString(response.data);
-  } catch (err) {
-    throw new Error(`Both RSS methods failed: ${err.message}`);
-  }
-}
+// --------------- RSS Mode (uses Reddit JSON API) ---------------
 
 async function pollRSS() {
   const { subreddits, keywords } = monitorConfig;
@@ -116,36 +325,50 @@ async function pollRSS() {
     return;
   }
 
-  console.log(`[RSS] Starting poll: ${subreddits.length} subs x ${keywords.length} keywords`);
+  // Combine keywords into OR query (max ~5 per query to avoid too-long URLs)
+  const keywordChunks = [];
+  for (let i = 0; i < keywords.length; i += 5) {
+    keywordChunks.push(keywords.slice(i, i + 5));
+  }
+
+  console.log(`[RSS] Starting poll: ${subreddits.length} subs, ${keywordChunks.length} keyword groups`);
   const newItems = [];
   let errors = 0;
+  let totalFetched = 0;
 
   for (const sub of subreddits) {
-    for (const keyword of keywords) {
-      // Use Reddit JSON API instead of RSS (more reliable)
-      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(keyword.trim())}&sort=new&restrict_sr=on&limit=25`;
+    for (const chunk of keywordChunks) {
+      // Combine keywords with OR for a single search
+      const query = chunk.map(kw => `"${kw}"`).join(' OR ');
+      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=25&t=week`;
+
       try {
         const response = await axios.get(jsonUrl, {
           headers: {
-            'User-Agent': 'RedditIntentMonitor/1.0 (Node.js; lead monitoring tool)',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
           timeout: 15000,
         });
 
         const posts = response.data?.data?.children || [];
-        console.log(`[RSS] r/${sub} "${keyword}" — ${posts.length} posts found`);
+        totalFetched += posts.length;
 
         for (const child of posts) {
           const post = child.data;
+          if (!post || post.over_18) continue;
+
           const title = post.title || '';
           const snippet = (post.selftext || '').slice(0, 300);
           const combined = `${title} ${snippet}`;
           const postUrl = `https://www.reddit.com${post.permalink}`;
 
+          // Extract thing_id for reply feature
+          const thingId = post.name || `t3_${post.id}`;
+
           newItems.push({
             id: post.permalink || post.id,
-            thingId: post.name || `t3_${post.id}`,
-            subreddit: sub.trim(),
+            thingId,
+            subreddit: post.subreddit || sub.trim(),
             title,
             author: post.author || 'unknown',
             url: postUrl,
@@ -162,16 +385,23 @@ async function pollRSS() {
         }
       } catch (err) {
         errors++;
-        console.error(`[RSS] Error r/${sub} "${keyword}": ${err.message}`);
+        const status = err.response?.status || 'unknown';
+        console.error(`[RSS] Error r/${sub} (${status}): ${err.message}`);
+
+        // If rate limited, wait longer
+        if (status === 429) {
+          console.log('[RSS] Rate limited — waiting 60s');
+          await new Promise(r => setTimeout(r, 60000));
+        }
       }
 
-      // Delay between requests to respect rate limits
-      await new Promise(r => setTimeout(r, 2000));
+      // Delay between requests (Reddit allows ~10 req/min without auth)
+      await new Promise(r => setTimeout(r, 3000));
     }
   }
 
   const added = addResults(newItems);
-  console.log(`[RSS] Done — ${newItems.length} total, ${added} new, ${errors} errors`);
+  console.log(`[RSS] Done — fetched ${totalFetched} posts, ${added} new unique, ${errors} errors`);
 }
 
 // --------------- Reddit API Mode ---------------
@@ -207,117 +437,70 @@ async function getRedditToken() {
   return redditAccessToken;
 }
 
-async function searchRedditAPI(query, subreddit) {
-  const token = await getRedditToken();
-  const userAgent = process.env.REDDIT_USER_AGENT || 'RedditIntentMonitor/1.0';
-
-  const subPath = subreddit ? `/r/${subreddit}` : '';
-  const url = `https://oauth.reddit.com${subPath}/search?q=${encodeURIComponent(query)}&sort=new&limit=25&type=link`;
-
-  const res = await axios.get(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'User-Agent': userAgent,
-    },
-  });
-
-  return (res.data.data?.children || []).map(child => child.data);
-}
-
-async function searchRedditComments(query, subreddit) {
-  const token = await getRedditToken();
-  const userAgent = process.env.REDDIT_USER_AGENT || 'RedditIntentMonitor/1.0';
-
-  const url = `https://oauth.reddit.com/r/${subreddit}/search?q=${encodeURIComponent(query)}&sort=new&limit=25&type=comment`;
-
-  try {
-    const res = await axios.get(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': userAgent,
-      },
-    });
-    return (res.data.data?.children || []).map(child => child.data);
-  } catch {
-    return [];
-  }
-}
-
 async function pollRedditAPI() {
   const { subreddits, keywords } = monitorConfig;
   if (!keywords.length) return;
 
   const newItems = [];
+  const token = await getRedditToken();
+  const userAgent = process.env.REDDIT_USER_AGENT || 'RedditIntentMonitor/1.0';
 
-  for (const keyword of keywords) {
-    // Global search across all subreddits
-    try {
-      const posts = subreddits.length
-        ? (await Promise.all(subreddits.map(sub => searchRedditAPI(keyword, sub.trim())))).flat()
-        : await searchRedditAPI(keyword, '');
+  // Combine keywords into OR query chunks
+  const keywordChunks = [];
+  for (let i = 0; i < keywords.length; i += 5) {
+    keywordChunks.push(keywords.slice(i, i + 5));
+  }
 
-      for (const post of posts) {
-        const title = post.title || '';
-        const snippet = (post.selftext || '').slice(0, 300);
-        const combined = `${title} ${snippet}`;
+  for (const sub of subreddits) {
+    for (const chunk of keywordChunks) {
+      const query = chunk.map(kw => `"${kw}"`).join(' OR ');
 
-        newItems.push({
-          id: post.permalink || post.id,
-          thingId: post.name || `t3_${post.id}`,
-          subreddit: post.subreddit || 'unknown',
-          title,
-          author: post.author || 'unknown',
-          url: `https://www.reddit.com${post.permalink}`,
-          snippet,
-          date: new Date((post.created_utc || 0) * 1000).toISOString(),
-          timeAgo: timeAgo(new Date((post.created_utc || 0) * 1000).toISOString()),
-          buyingSignal: hasBuyingSignal(combined),
-          matchedKeywords: keywords.filter(kw => combined.toLowerCase().includes(kw.toLowerCase())),
-          source: 'api',
-          type: 'post',
-          score: post.score || 0,
-          numComments: post.num_comments || 0,
-        });
-      }
-    } catch (err) {
-      console.error(`API post search error ["${keyword}"]: ${err.message}`);
-    }
-
-    // Comment search per subreddit
-    for (const sub of subreddits) {
       try {
-        const comments = await searchRedditComments(keyword, sub.trim());
-        for (const comment of comments) {
-          const body = (comment.body || '').slice(0, 300);
-          if (matchesKeywords(body, [keyword])) {
-            newItems.push({
-              id: comment.permalink || comment.id,
-              thingId: comment.name || `t1_${comment.id}`,
-              subreddit: comment.subreddit || sub.trim(),
-              title: `Comment in r/${comment.subreddit || sub.trim()}`,
-              author: comment.author || 'unknown',
-              url: comment.permalink ? `https://www.reddit.com${comment.permalink}` : '',
-              snippet: body,
-              date: new Date((comment.created_utc || 0) * 1000).toISOString(),
-              timeAgo: timeAgo(new Date((comment.created_utc || 0) * 1000).toISOString()),
-              buyingSignal: hasBuyingSignal(body),
-              matchedKeywords: [keyword],
-              source: 'api',
-              type: 'comment',
-              score: comment.score || 0,
-            });
-          }
+        // Search posts
+        const url = `https://oauth.reddit.com/r/${sub.trim()}/search?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=25&t=week&type=link`;
+        const res = await axios.get(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'User-Agent': userAgent,
+          },
+        });
+
+        for (const child of (res.data.data?.children || [])) {
+          const post = child.data;
+          if (!post || post.over_18) continue;
+
+          const title = post.title || '';
+          const snippet = (post.selftext || '').slice(0, 300);
+          const combined = `${title} ${snippet}`;
+
+          newItems.push({
+            id: post.permalink || post.id,
+            thingId: post.name || `t3_${post.id}`,
+            subreddit: post.subreddit || sub.trim(),
+            title,
+            author: post.author || 'unknown',
+            url: `https://www.reddit.com${post.permalink}`,
+            snippet,
+            date: new Date((post.created_utc || 0) * 1000).toISOString(),
+            timeAgo: timeAgo(new Date((post.created_utc || 0) * 1000).toISOString()),
+            buyingSignal: hasBuyingSignal(combined),
+            matchedKeywords: keywords.filter(kw => combined.toLowerCase().includes(kw.toLowerCase())),
+            source: 'api',
+            type: 'post',
+            score: post.score || 0,
+            numComments: post.num_comments || 0,
+          });
         }
       } catch (err) {
-        console.error(`API comment search error [r/${sub} "${keyword}"]: ${err.message}`);
+        console.error(`[API] Error r/${sub}: ${err.message}`);
       }
-    }
 
-    await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r => setTimeout(r, 1200));
+    }
   }
 
   const added = addResults(newItems);
-  console.log(`[API] Polled ${keywords.length} keywords — ${added} new results`);
+  console.log(`[API] Polled — ${added} new results`);
 }
 
 // --------------- Cron Scheduling ---------------
@@ -355,6 +538,11 @@ function stopPolling() {
 
 // --------------- API Routes ---------------
 
+// Health check (for UptimeRobot)
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime(), results: results.length, isRunning: !!cronJob });
+});
+
 // Get results
 app.get('/api/results', (req, res) => {
   const { subreddit, keyword, buyingSignalOnly } = req.query;
@@ -373,7 +561,6 @@ app.get('/api/results', (req, res) => {
     filtered = filtered.filter(r => r.buyingSignal);
   }
 
-  // Refresh timeAgo
   filtered = filtered.map(r => ({ ...r, timeAgo: timeAgo(r.date) }));
 
   res.json({
@@ -382,6 +569,7 @@ app.get('/api/results', (req, res) => {
     lastChecked,
     activeMode,
     isRunning: !!cronJob,
+    sheetsConnected: !!SPREADSHEET_ID,
     config: {
       subreddits: monitorConfig.subreddits,
       keywords: monitorConfig.keywords,
@@ -391,7 +579,7 @@ app.get('/api/results', (req, res) => {
   });
 });
 
-// Update settings and start/restart monitoring
+// Update settings
 app.post('/api/settings', (req, res) => {
   const { subreddits, keywords, pollMinutes, mode } = req.body;
 
@@ -411,6 +599,9 @@ app.post('/api/settings', (req, res) => {
   if (mode !== undefined) {
     monitorConfig.mode = mode === 'api' ? 'api' : 'rss';
   }
+
+  // Save config to sheets in background
+  saveConfigToSheets().catch(() => {});
 
   res.json({ ok: true, config: monitorConfig });
 });
@@ -475,7 +666,6 @@ app.post('/api/digest', (req, res) => {
     items = items.filter(r => r.buyingSignal);
   }
 
-  // Group by subreddit
   const grouped = {};
   for (const item of items.slice(0, 50)) {
     const sub = item.subreddit;
@@ -486,7 +676,6 @@ app.post('/api/digest', (req, res) => {
   const now = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const subjectLine = `Reddit Intent Monitor Digest — ${now}`;
 
-  // Plain text
   let plain = `${subjectLine}\n${'='.repeat(50)}\n\n`;
   plain += `${items.length} matching posts found.\n\n`;
   for (const [sub, posts] of Object.entries(grouped)) {
@@ -501,7 +690,6 @@ app.post('/api/digest', (req, res) => {
   }
   plain += `\nGenerated by Reddit Intent Monitor • ${new Date().toISOString()}\n`;
 
-  // HTML
   let html = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">`;
   html += `<div style="background:#1a1a1b;padding:20px;border-radius:8px 8px 0 0;">`;
   html += `<h1 style="color:#FF4500;margin:0;font-size:22px;">Reddit Intent Monitor</h1>`;
@@ -533,7 +721,6 @@ app.post('/api/digest', (req, res) => {
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 const OAUTH_REDIRECT = `${APP_URL}/auth/reddit/callback`;
 
-// Step 1: Redirect user to Reddit login
 app.get('/auth/reddit', (req, res) => {
   const clientId = process.env.REDDIT_CLIENT_ID;
   if (!clientId) {
@@ -547,7 +734,6 @@ app.get('/auth/reddit', (req, res) => {
   res.redirect(authUrl);
 });
 
-// Step 2: Reddit calls back with auth code
 app.get('/auth/reddit/callback', async (req, res) => {
   const { code, error } = req.query;
 
@@ -577,7 +763,6 @@ app.get('/auth/reddit/callback', async (req, res) => {
     userRefreshToken = tokenRes.data.refresh_token;
     userTokenExpiresAt = Date.now() + (tokenRes.data.expires_in - 60) * 1000;
 
-    // Get username
     const meRes = await axios.get('https://oauth.reddit.com/api/v1/me', {
       headers: {
         Authorization: `Bearer ${userAccessToken}`,
@@ -606,7 +791,6 @@ app.get('/auth/reddit/callback', async (req, res) => {
   }
 });
 
-// Refresh user token
 async function refreshUserToken() {
   if (!userRefreshToken) throw new Error('Not logged in to Reddit');
 
@@ -639,7 +823,6 @@ async function getUserToken() {
   return refreshUserToken();
 }
 
-// Check login status
 app.get('/api/reddit-user', (req, res) => {
   res.json({
     loggedIn: !!userAccessToken,
@@ -647,7 +830,6 @@ app.get('/api/reddit-user', (req, res) => {
   });
 });
 
-// Logout
 app.post('/api/reddit-logout', (req, res) => {
   userAccessToken = null;
   userRefreshToken = null;
@@ -656,7 +838,6 @@ app.post('/api/reddit-logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// Reply to a Reddit post/comment
 app.post('/api/reply', async (req, res) => {
   const { thingId, text } = req.body;
 
@@ -672,7 +853,7 @@ app.post('/api/reply', async (req, res) => {
     const token = await getUserToken();
     const userAgent = process.env.REDDIT_USER_AGENT || 'RedditIntentMonitor/1.0';
 
-    const response = await axios.post(
+    await axios.post(
       'https://oauth.reddit.com/api/comment',
       `thing_id=${thingId}&text=${encodeURIComponent(text)}`,
       {
@@ -684,7 +865,6 @@ app.post('/api/reply', async (req, res) => {
       }
     );
 
-    const commentData = response.data?.jquery || response.data;
     res.json({ ok: true, message: 'Reply posted successfully' });
   } catch (err) {
     const errMsg = err.response?.data?.json?.errors?.[0]?.[1] || err.message;
@@ -693,18 +873,24 @@ app.post('/api/reply', async (req, res) => {
   }
 });
 
-// Catch-all: return JSON 404 for any unmatched API route
+// Catch-all
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Serve index.html for all other routes (SPA fallback)
 app.get('*', (req, res) => {
   res.sendFile('index.html', { root: 'public' });
 });
 
 // --------------- Start Server ---------------
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n  Reddit Intent Monitor running at http://localhost:${PORT}\n`);
+
+  // Load data from Google Sheets on startup
+  if (SPREADSHEET_ID) {
+    console.log('[Sheets] Loading saved data...');
+    await loadFromSheets().catch(err => console.error('[Sheets] Load error:', err.message));
+    await loadConfigFromSheets().catch(err => console.error('[Sheets] Config load error:', err.message));
+  }
 });
