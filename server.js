@@ -14,7 +14,7 @@ app.use(express.static('public'));
 
 // --------------- In-Memory Store ---------------
 
-const MAX_RESULTS = 500;
+const MAX_RESULTS = 1000;
 let results = [];
 let lastChecked = null;
 let activeMode = 'rss';

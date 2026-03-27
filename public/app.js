@@ -149,7 +149,9 @@ async function fetchResults() {
     }
     previousCount = data.total;
 
-    renderResults(data.results);
+    // Sort newest first
+    const sorted = (data.results || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+    renderResults(sorted);
   } catch (err) {
     console.error('Fetch error:', err);
   }
