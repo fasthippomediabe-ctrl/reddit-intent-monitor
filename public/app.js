@@ -277,16 +277,26 @@ function markQualified(thingId, url) {
 }
 
 function markUnqualified(url) {
+  if (!confirm('Mark as unqualified and hide this lead?')) return;
+
   updateStatus(url, 'Unqualified');
 
-  // Gray out the card
+  // Animate out and hide the card
   const card = document.getElementById(`card-${CSS.escape(url)}`);
   if (card) {
-    card.classList.add('card-unqualified');
-    card.querySelector('.unqualified-btn')?.classList.add('active-unqualified');
-    card.querySelector('.qualified-btn')?.classList.remove('active-qualified');
+    card.style.transition = 'all 0.3s ease';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(50px)';
+    card.style.maxHeight = card.scrollHeight + 'px';
+    setTimeout(() => {
+      card.style.maxHeight = '0';
+      card.style.padding = '0';
+      card.style.margin = '0';
+      card.style.overflow = 'hidden';
+    }, 200);
+    setTimeout(() => card.remove(), 500);
   }
-  showToast('Marked as Unqualified');
+  showToast('Marked as Unqualified — hidden');
 }
 
 // --------------- Rendering ---------------
@@ -350,6 +360,7 @@ function renderResults(items) {
         <button class="status-btn unqualified-btn" onclick="markUnqualified('${safeUrl}')">Unqualified</button>
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
+          <button class="btn btn-small btn-secondary reply-btn" onclick="handleReply('${safeThingId}', '${safeUrl}')">Reply</button>
           <a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>
