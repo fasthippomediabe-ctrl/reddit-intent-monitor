@@ -294,7 +294,9 @@ function matchesKeywords(text, keywords) {
 function addResults(newItems) {
   const existingUrls = new Set(results.map(r => r.url));
   const unique = newItems.filter(item => !existingUrls.has(item.url));
-  results = [...unique, ...results].slice(0, MAX_RESULTS);
+  results = [...unique, ...results]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, MAX_RESULTS);
   lastChecked = new Date().toISOString();
 
   // Save new items to Google Sheets in background
@@ -341,7 +343,7 @@ async function pollRSS() {
     for (const chunk of keywordChunks) {
       // Use quotes only for multi-word phrases, plain for single words
       const query = chunk.map(kw => kw.includes(' ') ? `(${kw})` : kw).join(' OR ');
-      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=month`;
+      const jsonUrl = `https://www.reddit.com/r/${sub.trim()}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=week`;
 
       try {
         const response = await axios.get(jsonUrl, {
@@ -458,7 +460,7 @@ async function pollRedditAPI() {
 
       try {
         // Search posts
-        const url = `https://oauth.reddit.com/r/${sub.trim()}/search?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=month&type=link`;
+        const url = `https://oauth.reddit.com/r/${sub.trim()}/search?q=${encodeURIComponent(query)}&sort=new&restrict_sr=on&limit=50&t=week&type=link`;
         const res = await axios.get(url, {
           headers: {
             Authorization: `Bearer ${token}`,
