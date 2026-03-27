@@ -472,56 +472,115 @@ Reddit Lead Monitor scans Reddit in real-time for posts
 where people are actively looking for marketing, SEO,
 web design, and other services your agency offers.
 
+It monitors subreddits for keywords you set, flags
+high-intent "Buying Signal" posts, and lets you reply
+directly from the dashboard.
+
 STEP 1: Login
 -------------
 Use your team credentials to log in.
+- boss / leadfinder123
+- bryan / bryan2024
+(Ask admin for additional accounts)
 
 STEP 2: Configure Settings
 --------------------------
-- Click "Settings" in the top right
-- Enter subreddits (e.g. smallbusiness, entrepreneur, SEO)
-- Enter keywords (e.g. looking for agency, need SEO help)
+- Click "Settings" (top right)
+- Enter subreddits: smallbusiness, entrepreneur, SEO,
+  marketing, web_design, HVAC, plumbing, RealEstate, etc.
+- Enter keywords: agency, marketing, SEO help, need
+  website, Google Ads, PPC, branding, need leads, etc.
+- Use broad, short keywords for more results
 - Set poll interval (default: 5 minutes)
 - Click "Save & Start Monitoring"
 
-STEP 3: Monitor Results
+STEP 3: Lead Qualification Workflow
+------------------------------------
+For each post in the feed:
+
+1. Click "Open" to read the full Reddit post
+2. Decide: is this a real potential lead?
+
+   IF YES -> Click "Qualified Lead"
+          -> Reply box opens
+          -> Write and post your reply
+          -> Status auto-updates to "Replied" in
+             Google Sheets
+
+   IF NO  -> Click "Unqualified"
+          -> Card disappears from everyone's feed
+          -> Saved as "Unqualified" in Google Sheets
+
+MULTI-USER STATUS SYNC
 -----------------------
-- Results appear in the feed, newest first
-- "Buying Signal" badge = high-intent post
-- Click "Open" to view the Reddit post
-- Click "Reply" to respond directly (requires Reddit account)
-- Click "Replied" or "Rejected" to track status
+- Multiple team members can use the app simultaneously
+- When you mark a lead, all users see the update
+  within 30 seconds
+- Status shows WHO took action (e.g. "Replied by Bryan")
+- Unqualified leads are hidden from everyone's feed
+- All statuses saved to Google Sheets
 
-STEP 4: Reply Effectively
+FILTERING (PER-USER)
+---------------------
+Keywords are shared across the team. To focus on your
+area, use the filter bar at the top:
+
+- "Filter by subreddit" - see only specific subreddits
+- "Filter by keyword" - narrow by topic
+- "Buying signals only" checkbox - high-intent only
+- Filters are per-browser, don't affect other users
+
+HOW TO REPLY EFFECTIVELY
 --------------------------
-1. Read the full post
+1. Read the full post carefully
 2. Write a genuine, helpful comment
-3. Mention you can help further via DM
-4. Mark as "Replied" in the dashboard
+3. Be specific to their situation
+4. Offer to help via DM - don't hard-sell
+5. Reply during US business hours (8am-8pm EST)
 
-EXAMPLE REPLY:
-"I run a digital marketing agency and we work with a lot
-of [their industry] businesses. The biggest quick wins I'd
-suggest are [specific advice]. Happy to take a look for
-free if you want - just DM me."
+REPLY TEMPLATES
+----------------
+
+For someone needing a website:
+"I build websites for [industry] businesses. A few
+quick tips: clear CTA above the fold, mobile-first
+design, fast load times. For [industry] specifically,
+[tip]. Happy to take a look - just DM me."
+
+For someone needing marketing help:
+"I run a marketing agency and work with [industry]
+businesses. The biggest quick wins: [1-2 tips]. We've
+helped similar businesses [result]. Happy to give you
+a free audit - just DM me."
+
+For someone asking about SEO/PPC:
+"Common challenge. For your situation, I'd recommend
+[advice]. Key metrics to watch: [metrics]. We manage
+this for several [industry] clients - DM me if you
+want to compare notes."
 
 FEATURES
 --------
 - Buying signal detection (25+ intent phrases)
+- Qualified / Unqualified lead workflow
+- Real-time status sync across team members
 - Google Sheets integration (auto-saves all results)
-- Email digest generator
-- Sound notifications
-- Copy to clipboard
-- Status tracking (Replied/Rejected)
 - Reddit account integration for direct replies
+- Email digest generator (HTML and plain text)
+- Copy to clipboard (single or all results)
+- Sound notifications for new results
+- Auto-refresh every 30 seconds
+- Per-user filtering
 
-TIPS
-----
+TIPS FOR BEST RESULTS
+----------------------
+- Use broad, short keywords (not long phrases)
+- Add industry subreddits (HVAC, plumbing, dentistry)
 - Focus on "Buying Signal" posts first
-- Reply during US business hours (8am-8pm EST)
-- Be helpful first, promotional second
+- Don't reply to posts older than 3-4 days
 - Follow Reddit's 90/10 rule (90% helpful, 10% promo)
-- Check the Google Sheets link for full history
+- Keep the tab open for sound notifications
+- Check Google Sheets for full lead history
 
 ==========================================================
   Fast Hippo Media | fasthippomedia.com

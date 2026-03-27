@@ -173,41 +173,90 @@
         <h3>Quick Start</h3>
         <ol>
           <li>Click <strong>Settings</strong> (top right)</li>
-          <li>Enter subreddits (e.g. <code>smallbusiness, entrepreneur, SEO</code>)</li>
-          <li>Enter keywords (e.g. <code>looking for agency, need SEO help, need website</code>)</li>
+          <li>Enter subreddits (e.g. <code>smallbusiness, entrepreneur, SEO, marketing</code>)</li>
+          <li>Enter keywords (e.g. <code>agency, SEO help, need website, Google Ads, marketing</code>)</li>
           <li>Click <strong>Save & Start Monitoring</strong></li>
-          <li>Results appear in the feed — check for <strong>Buying Signal</strong> badges</li>
+          <li>Results appear in the feed — newest first, polls every 5 minutes</li>
         </ol>
 
-        <h3>Understanding Results</h3>
+        <h3>Understanding the Feed</h3>
         <ul>
           <li><strong>Buying Signal</strong> (orange badge) = high-intent post, someone actively looking for help</li>
-          <li><strong>Open</strong> = go to the Reddit post</li>
-          <li><strong>Reply</strong> = respond directly (requires Reddit account connected)</li>
-          <li><strong>Copy</strong> = copy post details to clipboard</li>
-          <li><strong>Mark Status</strong> = mark as Replied or Rejected (saves to Google Sheets)</li>
+          <li><strong>Subreddit badge</strong> (blue) = which Reddit community the post is from</li>
+          <li><strong>Points &amp; time</strong> = post popularity and how recent it is</li>
+          <li><strong>Keyword tags</strong> = which of your keywords matched this post</li>
+        </ul>
+
+        <h3>Lead Qualification Workflow</h3>
+        <p>For each post in the feed:</p>
+        <ol>
+          <li>Click <strong>Open</strong> to read the full Reddit post</li>
+          <li>Decide: is this a real potential lead for our agency?</li>
+          <li>If YES &rarr; click <strong>Qualified Lead</strong> &rarr; reply box opens &rarr; write and post your reply &rarr; status auto-updates to <strong>"Replied"</strong> in Google Sheets</li>
+          <li>If NO &rarr; click <strong>Unqualified</strong> &rarr; card disappears from everyone's feed</li>
+        </ol>
+
+        <h3>Status Sync (Multi-User)</h3>
+        <ul>
+          <li>Multiple team members can use the app at the same time</li>
+          <li>When someone marks a lead as <strong>Qualified</strong> or <strong>Replied</strong>, all users see the update within 30 seconds</li>
+          <li><strong>Unqualified</strong> leads are hidden from everyone's feed</li>
+          <li>The status shows <strong>who</strong> took the action (e.g. "Replied by Bryan")</li>
+          <li>All statuses are saved to <strong>Google Sheets</strong> for tracking</li>
+        </ul>
+
+        <h3>Filtering (Per-User)</h3>
+        <p>Keywords and subreddits are shared across the team. To focus on your area:</p>
+        <ul>
+          <li>Use the <strong>Filter by subreddit</strong> box to see only specific subreddits</li>
+          <li>Use the <strong>Filter by keyword</strong> box to narrow by topic</li>
+          <li>Check <strong>Buying signals only</strong> to see only high-intent posts</li>
+          <li>Filters are per-browser — they don't affect other users</li>
         </ul>
 
         <h3>How to Reply Effectively</h3>
-        <p>When you see a buying signal post:</p>
+        <p>When you find a qualified lead:</p>
         <ol>
-          <li>Read the full post by clicking <strong>Open</strong></li>
+          <li>Read the full post carefully — understand what they need</li>
           <li>Write a <strong>genuine, helpful</strong> comment — give free value first</li>
-          <li>Mention you can help further via DM</li>
-          <li>Mark as <strong>Replied</strong> to track in Google Sheets</li>
+          <li>Be specific to their situation (mention their industry, city, problem)</li>
+          <li>Offer to help further via DM — don't hard-sell</li>
+          <li>Reply during <strong>US business hours</strong> (8am-8pm EST) for best results</li>
         </ol>
 
-        <h3>Example Reply Template</h3>
+        <h3>Reply Templates</h3>
         <div class="template-box">
-          "I run a digital marketing agency and we work with a lot of [their industry] businesses. The biggest quick wins I'd suggest are [specific advice]. We've helped similar businesses [result]. Happy to take a look for free if you want — just DM me."
+          <strong>For someone needing a website:</strong><br>
+          "I build websites for [their industry] businesses. A few quick tips: make sure you have a clear CTA above the fold, mobile-first design, and fast load times. For [their industry] specifically, [specific tip]. Happy to take a look at what you have now — just DM me."
+        </div>
+        <div class="template-box" style="margin-top:10px;">
+          <strong>For someone needing marketing help:</strong><br>
+          "I run a marketing agency and we work with a lot of [their industry] businesses. The biggest quick wins I'd suggest are [1-2 specific tips]. We've helped similar businesses [specific result]. Happy to give you a free audit if you want — just DM me."
+        </div>
+        <div class="template-box" style="margin-top:10px;">
+          <strong>For someone asking about SEO/PPC:</strong><br>
+          "That's a common challenge. For [their situation], I'd recommend [specific advice]. The key metrics to watch are [metrics]. We manage this for several [their industry] clients — feel free to DM me if you want to compare notes."
         </div>
 
-        <h3>Features</h3>
+        <h3>Other Features</h3>
         <ul>
-          <li><strong>Generate Digest</strong> — create email-ready summary of today's leads</li>
-          <li><strong>Google Sheets</strong> — all results auto-save, track replied/rejected status</li>
-          <li><strong>Sound alerts</strong> — get pinged when new results arrive</li>
-          <li><strong>Auto-refresh</strong> — feed updates every 30 seconds</li>
+          <li><strong>Connect Reddit</strong> — link your Reddit account to reply directly from the dashboard</li>
+          <li><strong>Copy</strong> — copy post details to clipboard for sharing</li>
+          <li><strong>Copy All</strong> — copy entire feed as formatted list</li>
+          <li><strong>Generate Digest</strong> — create email-ready summary of today's leads (HTML or plain text)</li>
+          <li><strong>Google Sheets</strong> — click "View Lead History" link to see all results and statuses</li>
+          <li><strong>Sound alerts</strong> — toggle speaker icon to get notified of new results</li>
+          <li><strong>Auto-refresh</strong> — feed updates every 30 seconds automatically</li>
+        </ul>
+
+        <h3>Tips for Best Results</h3>
+        <ul>
+          <li>Use <strong>broad, short keywords</strong> (e.g. "agency" not "looking for a marketing agency")</li>
+          <li>Add industry subreddits where your clients hang out (e.g. <code>HVAC, plumbing, dentistry, RealEstate</code>)</li>
+          <li>Focus on <strong>Buying Signal</strong> posts first — these are the hottest leads</li>
+          <li>Follow Reddit's <strong>90/10 rule</strong> — 90% helpful comments, 10% mentioning your agency</li>
+          <li>Don't reply to posts older than <strong>3-4 days</strong> — they're less likely to convert</li>
+          <li>Keep the app tab open during work hours to receive sound notifications</li>
         </ul>
 
         <div style="text-align:center; margin-top:20px;">
