@@ -333,7 +333,7 @@ function renderResults(items) {
         <button class="status-btn" onclick="updateStatus('${escapeHtml(item.url)}', 'rejected', this)">Rejected</button>
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
-          ${item.thingId && redditConnected ? `<button class="btn btn-small btn-secondary" onclick="toggleReplyBox('${escapeHtml(item.thingId)}')">Reply</button>` : ''}
+          <button class="btn btn-small btn-secondary" onclick="handleReply('${escapeHtml(item.thingId || '')}')">Reply</button>
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>
@@ -599,6 +599,51 @@ async function logoutReddit() {
   updateRedditUI();
   fetchResults();
   showToast('Reddit disconnected');
+}
+
+function handleReply(thingId) {
+  if (!redditConnected) {
+    showConnectPrompt();
+    return;
+  }
+  if (!thingId) {
+    showToast('Cannot reply — post ID not available. Try opening the post directly.', true);
+    return;
+  }
+  toggleReplyBox(thingId);
+}
+
+function showConnectPrompt() {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.onclick = () => overlay.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.width = '420px';
+  modal.innerHTML = `
+    <div class="modal-header">
+      <h2>Connect Reddit Account</h2>
+      <button class="btn-close" onclick="this.closest('.overlay').remove()">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center; padding:30px;">
+      <span style="font-size:48px;">&#129435;</span>
+      <p style="margin:16px 0; color:var(--text-muted); font-size:14px;">
+        To reply directly from the dashboard, you need to connect your Reddit account first.
+      </p>
+      <p style="margin-bottom:20px; color:var(--text-muted); font-size:12px;">
+        This requires Reddit API credentials configured in the app settings.<br>
+        Ask your admin to set up REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET.
+      </p>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button class="btn btn-reddit" onclick="loginReddit(); this.closest('.overlay').remove();">Connect Reddit</button>
+        <button class="btn btn-secondary" onclick="this.closest('.overlay').remove()">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
 
 function toggleReplyBox(thingId) {
