@@ -668,6 +668,167 @@ body {
 .role-badge.admin { background: var(--fhm-blue); color: #fff; }
 .role-badge.user { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border); }
 
+/* --------------- Stats Bar --------------- */
+.stats-bar {
+  display: flex;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.stat-card {
+  flex: 1;
+  min-width: 90px;
+  text-align: center;
+  padding: 10px 8px;
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.stat-num { font-size: 22px; font-weight: 700; color: var(--text); }
+.stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+.stat-signal .stat-num { color: var(--accent); }
+.stat-replied .stat-num { color: var(--green); }
+.stat-qualified .stat-num { color: var(--blue); }
+
+/* --------------- Tab Navigation --------------- */
+.tab-nav {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  background: var(--bg-card);
+  border-bottom: 2px solid var(--border);
+}
+.tab-btn {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--fhm-blue); border-bottom-color: var(--fhm-blue); }
+
+/* --------------- Lead Age Indicator --------------- */
+.age-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.age-fresh { background: var(--green); } /* < 2 hours */
+.age-recent { background: #f59e0b; }    /* 2-24 hours */
+.age-old { background: var(--text-muted); } /* > 24 hours */
+
+/* --------------- Pin Button --------------- */
+.pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  opacity: 0.4;
+}
+.pin-btn:hover { opacity: 1; }
+.pin-btn.pinned { opacity: 1; color: #f59e0b; }
+.card-pinned { border-top: 2px solid #f59e0b !important; }
+
+/* --------------- Notes --------------- */
+.notes-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.notes-toggle:hover { border-color: var(--fhm-blue); color: var(--fhm-blue); }
+.notes-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.note-item {
+  padding: 6px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.note-item:last-child { border-bottom: none; }
+.note-author { color: var(--fhm-blue); font-weight: 600; }
+.note-input-row { display: flex; gap: 8px; margin-top: 8px; }
+.note-input-row input { flex: 1; }
+
+/* --------------- Analytics --------------- */
+.analytics-container { max-width: 900px; margin: 0 auto; padding: 0 24px 40px; }
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.analytics-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.analytics-card h3 { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Bar chart */
+.bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 140px; }
+.bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; transition: height 0.3s; }
+.bar-leads { background: var(--fhm-blue); }
+.bar-signals { background: var(--accent); margin-top: 2px; }
+.bar-label { font-size: 9px; color: var(--text-muted); margin-top: 6px; text-align: center; }
+.bar-value { font-size: 10px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+
+/* Subreddit list */
+.sub-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.sub-bar-bg { flex: 1; height: 20px; background: var(--bg-input); border-radius: 4px; overflow: hidden; }
+.sub-bar-fill { height: 100%; background: var(--fhm-blue); border-radius: 4px; transition: width 0.3s; }
+.sub-name { font-size: 12px; color: var(--text); min-width: 100px; }
+.sub-count { font-size: 12px; color: var(--text-muted); min-width: 30px; text-align: right; }
+
+/* Funnel */
+.funnel-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.funnel-label { font-size: 13px; color: var(--text); min-width: 100px; }
+.funnel-bar-bg { flex: 1; height: 24px; background: var(--bg-input); border-radius: 6px; overflow: hidden; }
+.funnel-bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 600; color: #fff; }
+
+/* --------------- Activity Log --------------- */
+.activity-container { max-width: 700px; margin: 0 auto; padding: 0 24px 40px; }
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.activity-time { color: var(--text-muted); font-size: 11px; min-width: 80px; }
+.activity-user { color: var(--fhm-blue); font-weight: 600; }
+.activity-action { color: var(--text); }
+.activity-detail { color: var(--text-muted); font-size: 12px; }
+
+/* --------------- Template Dropdown --------------- */
+.template-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
 .hidden { display: none !important; }
 
 /* --------------- Scrollbar --------------- */

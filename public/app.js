@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initApp() {
   loadSettings();
   fetchResults();
+  fetchStats();
   startAutoRefresh();
   checkRedditLogin();
   updateSheetsLink();
@@ -124,6 +125,7 @@ function initApp() {
   document.getElementById('filter-subreddit').addEventListener('input', fetchResults);
   document.getElementById('filter-keyword').addEventListener('input', fetchResults);
   document.getElementById('filter-buying-signal').addEventListener('change', fetchResults);
+  document.getElementById('filter-pinned').addEventListener('change', fetchResults);
 }
 
 function updateSheetsLink() {
@@ -157,8 +159,17 @@ async function fetchResults() {
     }
     previousCount = data.total;
 
-    // Sort newest first
-    const sorted = (data.results || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Sort: pinned first, then newest
+    let sorted = (data.results || []).sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    // Filter pinned only
+    const pinnedOnly = document.getElementById('filter-pinned')?.checked;
+    if (pinnedOnly) sorted = sorted.filter(r => r.pinned);
+
     renderResults(sorted);
   } catch (err) {
     console.error('Fetch error:', err);
@@ -352,9 +363,13 @@ function renderResults(items) {
   feed.innerHTML = items.map(item => {
     const safeUrl = escapeHtml(item.url);
     const safeThingId = escapeHtml(item.thingId || '');
+    const ageClass = getAgeClass(item.date);
+    const encodedUrl = encodeURIComponent(item.url);
     return `
-    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''} ${item.leadStatus?.status === 'Replied' ? 'card-replied' : ''} ${item.leadStatus?.status === 'Qualified' ? 'card-qualified' : ''}" id="card-${safeUrl}">
+    <div class="result-card ${item.buyingSignal ? 'buying-signal' : ''} ${item.leadStatus?.status === 'Replied' ? 'card-replied' : ''} ${item.leadStatus?.status === 'Qualified' ? 'card-qualified' : ''} ${item.pinned ? 'card-pinned' : ''}" id="card-${safeUrl}">
       <div class="card-header">
+        <button class="pin-btn ${item.pinned ? 'pinned' : ''}" onclick="togglePin('${safeUrl}')" title="${item.pinned ? 'Unpin' : 'Pin this lead'}">${item.pinned ? '&#9733;' : '&#9734;'}</button>
+        <span class="age-dot ${ageClass}" title="${escapeHtml(item.timeAgo)}"></span>
         <span class="sub-badge">r/${escapeHtml(item.subreddit)}</span>
         ${item.buyingSignal ? '<span class="signal-badge">Buying Signal</span>' : ''}
         ${item.type === 'comment' ? '<span class="comment-badge">Comment</span>' : ''}
@@ -373,13 +388,24 @@ function renderResults(items) {
             : `<button class="status-btn qualified-btn" onclick="markQualified('${safeThingId}', '${safeUrl}')">Qualified Lead</button>`
         }
         ${!item.leadStatus ? `<button class="status-btn unqualified-btn" onclick="markUnqualified('${safeUrl}')">Unqualified</button>` : ''}
+        <button class="notes-toggle" onclick="toggleNotes('${encodedUrl}')">${item.notesCount ? `Notes (${item.notesCount})` : 'Add Note'}</button>
         <div class="card-actions">
           <button class="btn btn-small btn-secondary" onclick="copyResult(this, ${escapeAttr(JSON.stringify(item))})">Copy</button>
           ${item.leadStatus?.status !== 'Replied' ? `<button class="btn btn-small btn-secondary reply-btn" onclick="handleReply('${safeThingId}', '${safeUrl}')">Reply</button>` : ''}
           <a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-small btn-brand">Open</a>
         </div>
       </div>
+      <div id="notes-${encodedUrl}" class="notes-section hidden">
+        <div id="notes-list-${encodedUrl}"></div>
+        <div class="note-input-row">
+          <input type="text" class="input-field" id="note-input-${encodedUrl}" placeholder="Add a note..." onkeydown="if(event.key==='Enter')addNote('${encodedUrl}')">
+          <button class="btn btn-small btn-brand" onclick="addNote('${encodedUrl}')">Add</button>
+        </div>
+      </div>
       <div id="reply-${safeThingId}" class="reply-box hidden" data-url="${safeUrl}">
+        <select class="template-select" onchange="applyTemplate(this, '${safeThingId}')">
+          <option value="">Use a reply template...</option>
+        </select>
         <textarea id="reply-text-${safeThingId}" placeholder="Write your reply... Be genuine and helpful." oninput="updateCharCount('${safeThingId}')"></textarea>
         <div class="reply-actions">
           <button class="btn btn-small btn-brand" onclick="submitReply('${safeThingId}', this)">Post Reply</button>
@@ -390,6 +416,9 @@ function renderResults(items) {
       </div>
     </div>`;
   }).join('');
+
+  // Load templates into all dropdowns
+  loadTemplates();
 }
 
 // --------------- Copy Functions ---------------
@@ -658,7 +687,7 @@ function playNotification() {
 // --------------- Auto-Refresh ---------------
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-  autoRefreshInterval = setInterval(fetchResults, 30000);
+  autoRefreshInterval = setInterval(() => { fetchResults(); fetchStats(); }, 30000);
 }
 
 // --------------- Reddit Login & Reply ---------------
@@ -942,6 +971,229 @@ async function deleteUser(username) {
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
+}
+
+// --------------- Stats & Analytics ---------------
+async function fetchStats() {
+  try {
+    const res = await fetch(`${API}/api/stats`);
+    const s = await res.json();
+
+    document.getElementById('stat-today').textContent = s.today?.leads || 0;
+    document.getElementById('stat-signals').textContent = s.today?.buyingSignals || 0;
+    document.getElementById('stat-replied').textContent = s.statuses?.replied || 0;
+    document.getElementById('stat-qualified').textContent = s.statuses?.qualified || 0;
+    document.getElementById('stat-week').textContent = s.week?.leads || 0;
+    document.getElementById('stat-pinned').textContent = s.pinnedCount || 0;
+
+    // Store for analytics tab
+    window._statsData = s;
+  } catch {}
+}
+
+// --------------- Tab Switching ---------------
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => { if (b.textContent.toLowerCase().includes(tab)) b.classList.add('active'); });
+
+  document.getElementById('tab-feed').classList.toggle('hidden', tab !== 'feed');
+  document.getElementById('tab-analytics').classList.toggle('hidden', tab !== 'analytics');
+  document.getElementById('tab-activity').classList.toggle('hidden', tab !== 'activity');
+
+  if (tab === 'analytics') renderAnalytics();
+  if (tab === 'activity') loadActivity();
+}
+
+function renderAnalytics() {
+  const s = window._statsData;
+  if (!s) { fetchStats().then(renderAnalytics); return; }
+
+  // Daily chart
+  const daily = document.getElementById('chart-daily');
+  const maxLeads = Math.max(...(s.dailyCounts || []).map(d => d.leads), 1);
+  daily.innerHTML = (s.dailyCounts || []).map(d => `
+    <div class="bar-group">
+      <div class="bar-value">${d.leads}</div>
+      <div class="bar bar-leads" style="height:${(d.leads / maxLeads) * 100}px"></div>
+      <div class="bar bar-signals" style="height:${(d.signals / maxLeads) * 100}px"></div>
+      <div class="bar-label">${d.date}</div>
+    </div>
+  `).join('');
+
+  // Subreddits
+  const subs = document.getElementById('chart-subreddits');
+  const maxSub = Math.max(...(s.topSubreddits || []).map(s => s.count), 1);
+  subs.innerHTML = (s.topSubreddits || []).slice(0, 8).map(sub => `
+    <div class="sub-row">
+      <span class="sub-name">r/${escapeHtml(sub.name)}</span>
+      <div class="sub-bar-bg"><div class="sub-bar-fill" style="width:${(sub.count / maxSub) * 100}%"></div></div>
+      <span class="sub-count">${sub.count}</span>
+    </div>
+  `).join('') || '<p style="color:var(--text-muted)">No data yet</p>';
+
+  // Funnel
+  const funnel = document.getElementById('chart-funnel');
+  const total = s.total || 1;
+  const funnelData = [
+    { label: 'Total Leads', count: s.total, color: 'var(--fhm-blue)' },
+    { label: 'Buying Signal', count: Math.round(total * (s.signalPct || 0) / 100), color: 'var(--accent)' },
+    { label: 'Qualified', count: s.statuses?.qualified || 0, color: 'var(--blue)' },
+    { label: 'Replied', count: s.statuses?.replied || 0, color: 'var(--green)' },
+  ];
+  funnel.innerHTML = funnelData.map(f => `
+    <div class="funnel-row">
+      <span class="funnel-label">${f.label}</span>
+      <div class="funnel-bar-bg">
+        <div class="funnel-bar-fill" style="width:${Math.max((f.count / total) * 100, 2)}%; background:${f.color};">${f.count}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // Signal rate
+  document.getElementById('chart-signal-rate').innerHTML = `
+    <div style="font-size:48px; font-weight:700; color:var(--accent);">${s.signalPct || 0}%</div>
+    <div style="font-size:13px; color:var(--text-muted); margin-top:4px;">of all leads are buying signals</div>
+    <div style="margin-top:12px; font-size:12px; color:var(--text-muted);">Total: ${s.total} leads</div>
+  `;
+}
+
+// --------------- Activity Log ---------------
+async function loadActivity() {
+  const container = document.getElementById('activity-list');
+  container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">Loading...</p>';
+
+  try {
+    const res = await fetch(`${API}/api/activity`);
+    const data = await res.json();
+
+    if (!data.activities?.length) {
+      container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:40px;">No activity yet. Start qualifying leads to see activity here.</p>';
+      return;
+    }
+
+    container.innerHTML = data.activities.map(a => {
+      const time = new Date(a.timestamp);
+      const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dateStr = time.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return `
+        <div class="activity-item">
+          <span class="activity-time">${dateStr}<br>${timeStr}</span>
+          <div>
+            <span class="activity-user">${escapeHtml(a.user)}</span>
+            <span class="activity-action"> ${escapeHtml(a.action)}</span>
+            ${a.detail ? `<div class="activity-detail">${escapeHtml(a.detail)}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  } catch {
+    container.innerHTML = '<p style="color:var(--red);">Error loading activity</p>';
+  }
+}
+
+// --------------- Lead Age Indicator ---------------
+function getAgeClass(dateStr) {
+  const hours = (Date.now() - new Date(dateStr).getTime()) / 3600000;
+  if (hours < 2) return 'age-fresh';
+  if (hours < 24) return 'age-recent';
+  return 'age-old';
+}
+
+// --------------- Pin ---------------
+async function togglePin(url) {
+  try {
+    const res = await fetch(`${API}/api/pin`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    showToast(data.pinned ? 'Pinned' : 'Unpinned');
+    fetchResults();
+    fetchStats();
+  } catch {
+    showToast('Error pinning', true);
+  }
+}
+
+// --------------- Notes ---------------
+function toggleNotes(encodedUrl) {
+  const section = document.getElementById(`notes-${encodedUrl}`);
+  if (!section) return;
+  const isHidden = section.classList.contains('hidden');
+  section.classList.toggle('hidden');
+  if (isHidden) loadNotes(encodedUrl);
+}
+
+async function loadNotes(encodedUrl) {
+  const container = document.getElementById(`notes-list-${encodedUrl}`);
+  if (!container) return;
+
+  try {
+    const res = await fetch(`${API}/api/notes/${encodedUrl}`);
+    const data = await res.json();
+    const notes = data.notes || [];
+
+    container.innerHTML = notes.length
+      ? notes.map(n => {
+          const time = new Date(n.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return `<div class="note-item"><span class="note-author">${escapeHtml(n.author)}</span> <span style="color:var(--text-muted); font-size:10px;">${time}</span><br>${escapeHtml(n.text)}</div>`;
+        }).join('')
+      : '<div style="font-size:12px; color:var(--text-muted); padding:4px 0;">No notes yet</div>';
+  } catch {
+    container.innerHTML = '<div style="color:var(--red); font-size:12px;">Error loading notes</div>';
+  }
+}
+
+async function addNote(encodedUrl) {
+  const input = document.getElementById(`note-input-${encodedUrl}`);
+  const text = input?.value?.trim();
+  if (!text) return;
+
+  try {
+    await fetch(`${API}/api/notes`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ url: decodeURIComponent(encodedUrl), text }),
+    });
+    input.value = '';
+    loadNotes(encodedUrl);
+    showToast('Note added');
+  } catch {
+    showToast('Error adding note', true);
+  }
+}
+
+// --------------- Reply Templates ---------------
+let cachedTemplates = null;
+
+async function loadTemplates() {
+  if (!cachedTemplates) {
+    try {
+      const res = await fetch(`${API}/api/templates`);
+      const data = await res.json();
+      cachedTemplates = data.templates || [];
+    } catch { cachedTemplates = []; }
+  }
+
+  document.querySelectorAll('.template-select').forEach(sel => {
+    if (sel.options.length <= 1) {
+      cachedTemplates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.text;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+    }
+  });
+}
+
+function applyTemplate(select, thingId) {
+  const textarea = document.getElementById(`reply-text-${thingId}`);
+  if (textarea && select.value) {
+    textarea.value = select.value;
+    updateCharCount(thingId);
+  }
+  select.selectedIndex = 0;
 }
 
 // --------------- Helpers ---------------

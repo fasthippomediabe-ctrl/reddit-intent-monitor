@@ -70,16 +70,57 @@
       <a href="https://fasthippomedia.com" target="_blank" class="quick-link">fasthippomedia.com</a>
     </div>
 
-    <!-- Filter Bar -->
-    <div class="filter-bar">
-      <input type="text" id="filter-subreddit" placeholder="Filter by subreddit..." class="input-field">
-      <input type="text" id="filter-keyword" placeholder="Filter by keyword..." class="input-field">
-      <label class="checkbox-label">
-        <input type="checkbox" id="filter-buying-signal">
-        <span>Buying signals only</span>
-      </label>
-      <button id="btn-refresh" class="btn btn-small">Refresh Now</button>
+    <!-- Stats Bar -->
+    <div id="stats-bar" class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-today">0</div>
+        <div class="stat-label">Today</div>
+      </div>
+      <div class="stat-card stat-signal">
+        <div class="stat-num" id="stat-signals">0</div>
+        <div class="stat-label">Buying Signals</div>
+      </div>
+      <div class="stat-card stat-replied">
+        <div class="stat-num" id="stat-replied">0</div>
+        <div class="stat-label">Replied</div>
+      </div>
+      <div class="stat-card stat-qualified">
+        <div class="stat-num" id="stat-qualified">0</div>
+        <div class="stat-label">Qualified</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-week">0</div>
+        <div class="stat-label">This Week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-pinned">0</div>
+        <div class="stat-label">Pinned</div>
+      </div>
     </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('feed')">Lead Feed</button>
+      <button class="tab-btn" onclick="switchTab('analytics')">Analytics</button>
+      <button class="tab-btn" onclick="switchTab('activity')">Team Activity</button>
+    </div>
+
+    <!-- Feed Tab -->
+    <div id="tab-feed">
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <input type="text" id="filter-subreddit" placeholder="Filter by subreddit..." class="input-field">
+        <input type="text" id="filter-keyword" placeholder="Filter by keyword..." class="input-field">
+        <label class="checkbox-label">
+          <input type="checkbox" id="filter-buying-signal">
+          <span>Buying signals only</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="filter-pinned">
+          <span>Pinned only</span>
+        </label>
+        <button id="btn-refresh" class="btn btn-small">Refresh Now</button>
+      </div>
 
     <!-- Results Feed -->
     <main id="results-feed" class="feed">
@@ -89,6 +130,41 @@
         <button onclick="openSettings()" class="btn btn-brand">Open Settings</button>
       </div>
     </main>
+
+    </div><!-- end tab-feed -->
+
+    <!-- Analytics Tab -->
+    <div id="tab-analytics" class="hidden">
+      <div class="analytics-container">
+        <h2 style="margin:20px 0 16px; text-align:center;">Analytics Dashboard</h2>
+        <div class="analytics-grid">
+          <div class="analytics-card">
+            <h3>Leads Per Day (Last 7 Days)</h3>
+            <div id="chart-daily" class="bar-chart"></div>
+          </div>
+          <div class="analytics-card">
+            <h3>Top Subreddits</h3>
+            <div id="chart-subreddits"></div>
+          </div>
+          <div class="analytics-card">
+            <h3>Lead Funnel</h3>
+            <div id="chart-funnel"></div>
+          </div>
+          <div class="analytics-card">
+            <h3>Buying Signal Rate</h3>
+            <div id="chart-signal-rate" style="text-align:center; padding:20px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Tab -->
+    <div id="tab-activity" class="hidden">
+      <div class="activity-container">
+        <h2 style="margin:20px 0 16px; text-align:center;">Team Activity Log</h2>
+        <div id="activity-list"></div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="fhm-footer">

@@ -32,6 +32,50 @@ let redditUsername = null;
 // key: url, value: { status: 'Qualified'|'Replied'|'Unqualified', updatedBy: username, updatedAt: timestamp }
 const leadStatuses = new Map();
 
+// Pinned leads (key: url, value: { pinnedBy, pinnedAt })
+const pinnedLeads = new Map();
+
+// Lead notes (key: url, value: [{ text, author, timestamp }])
+const leadNotes = new Map();
+
+// Team activity log (last 200 actions)
+const activityLog = [];
+const MAX_ACTIVITY = 200;
+
+function logActivity(user, action, detail) {
+  activityLog.unshift({
+    user: user?.name || user?.username || 'unknown',
+    action,
+    detail: (detail || '').slice(0, 150),
+    timestamp: new Date().toISOString(),
+  });
+  if (activityLog.length > MAX_ACTIVITY) activityLog.length = MAX_ACTIVITY;
+}
+
+// Reply templates
+const REPLY_TEMPLATES = [
+  {
+    name: "Website Help",
+    text: "I build websites for [industry] businesses. A few quick tips: make sure you have a clear CTA above the fold, mobile-first design, and fast load times. For [industry] specifically, [specific tip]. Happy to take a look at what you have — just DM me."
+  },
+  {
+    name: "Marketing Help",
+    text: "I run a marketing agency and we work with a lot of [industry] businesses. The biggest quick wins I'd suggest are [1-2 specific tips]. We've helped similar businesses [specific result]. Happy to give you a free audit if you want — just DM me."
+  },
+  {
+    name: "SEO / PPC Help",
+    text: "That's a common challenge. For your situation, I'd recommend [specific advice]. The key metrics to watch are [metrics]. We manage this for several [industry] clients — feel free to DM me if you want to compare notes."
+  },
+  {
+    name: "General Helpful",
+    text: "Great question! From my experience working with [industry] businesses, [specific insight]. The most important thing is [key advice]. Happy to chat more about this — DM me if you'd like."
+  },
+  {
+    name: "Local Business",
+    text: "I work with local businesses like yours in [city/area]. The biggest thing I see work for [industry] is [specific strategy]. It's helped our clients [specific result]. Let me know if you want to discuss — always happy to help."
+  },
+];
+
 // Current monitoring config
 let monitorConfig = {
   subreddits: [],
@@ -787,6 +831,7 @@ app.post('/api/update-status', authMiddleware, async (req, res) => {
       updatedBy: req.user?.name || req.user?.username || 'unknown',
       updatedAt: new Date().toISOString(),
     });
+    logActivity(req.user, `marked ${status}`, url.slice(0, 80));
   } else {
     leadStatuses.delete(url);
   }
@@ -821,6 +866,117 @@ app.post('/api/update-status', authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+// --------------- Stats & Analytics ---------------
+
+app.get('/api/stats', (req, res) => {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const weekStart = new Date(now.getTime() - 7 * 86400000).toISOString();
+
+  // Today's leads
+  const todayLeads = results.filter(r => r.date >= todayStart);
+  const todayBuyingSignals = todayLeads.filter(r => r.buyingSignal);
+  const weekLeads = results.filter(r => r.date >= weekStart);
+
+  // Status counts
+  let qualified = 0, replied = 0, unqualified = 0;
+  for (const [, ls] of leadStatuses) {
+    if (ls.status === 'Qualified') qualified++;
+    if (ls.status === 'Replied') replied++;
+    if (ls.status === 'Unqualified') unqualified++;
+  }
+
+  // Subreddit breakdown
+  const subCounts = {};
+  for (const r of results) {
+    subCounts[r.subreddit] = (subCounts[r.subreddit] || 0) + 1;
+  }
+  const topSubreddits = Object.entries(subCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
+  // Daily lead counts (last 7 days)
+  const dailyCounts = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = new Date(now.getTime() - i * 86400000);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const count = results.filter(r => r.date >= dayStart.toISOString() && r.date < dayEnd.toISOString()).length;
+    const signals = results.filter(r => r.date >= dayStart.toISOString() && r.date < dayEnd.toISOString() && r.buyingSignal).length;
+    dailyCounts.push({
+      date: dayStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+      leads: count,
+      signals,
+    });
+  }
+
+  // Buying signal percentage
+  const signalPct = results.length ? Math.round((results.filter(r => r.buyingSignal).length / results.length) * 100) : 0;
+
+  res.json({
+    today: { leads: todayLeads.length, buyingSignals: todayBuyingSignals.length },
+    week: { leads: weekLeads.length },
+    total: results.length,
+    statuses: { qualified, replied, unqualified },
+    topSubreddits,
+    dailyCounts,
+    signalPct,
+    pinnedCount: pinnedLeads.size,
+  });
+});
+
+// --------------- Pinned Leads ---------------
+
+app.post('/api/pin', authMiddleware, (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+
+  if (pinnedLeads.has(url)) {
+    pinnedLeads.delete(url);
+    logActivity(req.user, 'unpinned', url.slice(0, 80));
+    res.json({ ok: true, pinned: false });
+  } else {
+    pinnedLeads.set(url, { pinnedBy: req.user?.name || req.user?.username, pinnedAt: new Date().toISOString() });
+    logActivity(req.user, 'pinned', url.slice(0, 80));
+    res.json({ ok: true, pinned: true });
+  }
+});
+
+// --------------- Lead Notes ---------------
+
+app.get('/api/notes/:url', (req, res) => {
+  const url = decodeURIComponent(req.params.url);
+  res.json({ notes: leadNotes.get(url) || [] });
+});
+
+app.post('/api/notes', authMiddleware, (req, res) => {
+  const { url, text } = req.body;
+  if (!url || !text) return res.status(400).json({ error: 'URL and text required' });
+
+  const notes = leadNotes.get(url) || [];
+  notes.push({
+    text: text.slice(0, 500),
+    author: req.user?.name || req.user?.username || 'unknown',
+    timestamp: new Date().toISOString(),
+  });
+  leadNotes.set(url, notes);
+  logActivity(req.user, 'added note', `${text.slice(0, 50)}...`);
+  res.json({ ok: true, notes });
+});
+
+// --------------- Activity Log ---------------
+
+app.get('/api/activity', (req, res) => {
+  res.json({ activities: activityLog.slice(0, 50) });
+});
+
+// --------------- Reply Templates ---------------
+
+app.get('/api/templates', (req, res) => {
+  res.json({ templates: REPLY_TEMPLATES });
+});
+
 // --------------- API Routes ---------------
 
 // Health check (for UptimeRobot)
@@ -846,13 +1002,22 @@ app.get('/api/results', (req, res) => {
     filtered = filtered.filter(r => r.buyingSignal);
   }
 
-  // Attach lead statuses and filter out Unqualified
+  // Attach lead statuses, pin status, notes count, and filter out Unqualified
   filtered = filtered
     .map(r => {
       const ls = leadStatuses.get(r.url);
-      return { ...r, timeAgo: timeAgo(r.date), leadStatus: ls || null };
+      const pin = pinnedLeads.get(r.url);
+      const notes = leadNotes.get(r.url);
+      return { ...r, timeAgo: timeAgo(r.date), leadStatus: ls || null, pinned: !!pin, pinnedBy: pin?.pinnedBy, notesCount: notes?.length || 0 };
     })
     .filter(r => !r.leadStatus || r.leadStatus.status !== 'Unqualified');
+
+  // Sort: pinned first, then by date
+  filtered.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.date) - new Date(a.date);
+  });
 
   res.json({
     results: filtered,
