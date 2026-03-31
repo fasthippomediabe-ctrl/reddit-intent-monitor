@@ -543,16 +543,109 @@ function stopPolling() {
   console.log('[Monitor] Stopped polling');
 }
 
-// --------------- Team Login ---------------
+// --------------- Team Login & User Management ---------------
 
-const TEAM_USERS = {
+// Default users (fallback if Sheets not available)
+const DEFAULT_USERS = {
   boss: { password: 'leadfinder123', role: 'admin', name: 'Boss' },
   bryan: { password: 'bryan2024', role: 'admin', name: 'Bryan' },
-  user1: { password: 'user1pass', role: 'user', name: 'Team Member 1' },
-  user2: { password: 'user2pass', role: 'user', name: 'Team Member 2' },
 };
 
-// Simple token store (in production, use JWT)
+// Dynamic users loaded from Google Sheets
+let teamUsers = { ...DEFAULT_USERS };
+
+async function loadUsersFromSheets() {
+  if (!SPREADSHEET_ID) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const sheetNames = spreadsheet.data.sheets.map(s => s.properties.title);
+
+    if (!sheetNames.includes('Users')) {
+      // Create Users sheet with defaults
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [{ addSheet: { properties: { title: 'Users' } } }],
+        },
+      });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Users!A1:D1',
+        valueInputOption: 'RAW',
+        requestBody: { values: [['Username', 'Password', 'Role', 'Name']] },
+      });
+      // Add default users
+      const defaultRows = Object.entries(DEFAULT_USERS).map(([username, u]) => [username, u.password, u.role, u.name]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Users!A:D',
+        valueInputOption: 'RAW',
+        requestBody: { values: defaultRows },
+      });
+      console.log('[Sheets] Created Users sheet with defaults');
+      return;
+    }
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Users!A:D',
+    });
+
+    const rows = res.data.values;
+    if (!rows || rows.length <= 1) return;
+
+    const loaded = {};
+    for (let i = 1; i < rows.length; i++) {
+      const [username, password, role, name] = rows[i];
+      if (username && password) {
+        loaded[username.toLowerCase().trim()] = {
+          password,
+          role: role || 'user',
+          name: name || username,
+        };
+      }
+    }
+
+    if (Object.keys(loaded).length > 0) {
+      teamUsers = loaded;
+      console.log(`[Sheets] Loaded ${Object.keys(loaded).length} users`);
+    }
+  } catch (err) {
+    console.error('[Sheets] Load users error:', err.message);
+  }
+}
+
+async function saveUsersToSheets() {
+  if (!SPREADSHEET_ID) return;
+  const sheets = await getSheetsClient();
+  if (!sheets) return;
+
+  try {
+    const rows = [['Username', 'Password', 'Role', 'Name']];
+    for (const [username, u] of Object.entries(teamUsers)) {
+      rows.push([username, u.password, u.role, u.name]);
+    }
+
+    // Clear and rewrite
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Users!A:D',
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Users!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values: rows },
+    });
+    console.log(`[Sheets] Saved ${Object.keys(teamUsers).length} users`);
+  } catch (err) {
+    console.error('[Sheets] Save users error:', err.message);
+  }
+}
+
 const activeSessions = new Map();
 
 function generateToken() {
@@ -568,18 +661,25 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+function adminMiddleware(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  const user = TEAM_USERS[username];
+  const user = teamUsers[username?.toLowerCase()?.trim()];
 
   if (!user || user.password !== password) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
   const token = generateToken();
-  activeSessions.set(token, { username, role: user.role, name: user.name });
+  activeSessions.set(token, { username: username.toLowerCase().trim(), role: user.role, name: user.name });
 
-  res.json({ ok: true, token, username, role: user.role, name: user.name });
+  res.json({ ok: true, token, username: username.toLowerCase().trim(), role: user.role, name: user.name });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -595,6 +695,83 @@ app.get('/api/check-auth', (req, res) => {
   }
   const user = activeSessions.get(token);
   res.json({ authenticated: true, ...user });
+});
+
+// --------------- Admin: User Management ---------------
+
+app.get('/api/users', authMiddleware, adminMiddleware, (req, res) => {
+  const users = Object.entries(teamUsers).map(([username, u]) => ({
+    username,
+    role: u.role,
+    name: u.name,
+  }));
+  res.json({ users });
+});
+
+app.post('/api/users', authMiddleware, adminMiddleware, async (req, res) => {
+  const { username, password, role, name } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  const key = username.toLowerCase().trim();
+  if (teamUsers[key]) {
+    return res.status(400).json({ error: 'Username already exists' });
+  }
+
+  teamUsers[key] = {
+    password,
+    role: role || 'user',
+    name: name || username,
+  };
+
+  await saveUsersToSheets().catch(() => {});
+  res.json({ ok: true, message: `User "${key}" created` });
+});
+
+app.put('/api/users/:username', authMiddleware, adminMiddleware, async (req, res) => {
+  const key = req.params.username.toLowerCase().trim();
+  if (!teamUsers[key]) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const { password, role, name } = req.body;
+  if (password) teamUsers[key].password = password;
+  if (role) teamUsers[key].role = role;
+  if (name) teamUsers[key].name = name;
+
+  await saveUsersToSheets().catch(() => {});
+  res.json({ ok: true, message: `User "${key}" updated` });
+});
+
+app.delete('/api/users/:username', authMiddleware, adminMiddleware, async (req, res) => {
+  const key = req.params.username.toLowerCase().trim();
+
+  if (!teamUsers[key]) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Prevent deleting yourself
+  if (req.user.username === key) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  // Must keep at least one admin
+  const admins = Object.entries(teamUsers).filter(([, u]) => u.role === 'admin');
+  if (teamUsers[key].role === 'admin' && admins.length <= 1) {
+    return res.status(400).json({ error: 'Cannot delete the last admin account' });
+  }
+
+  delete teamUsers[key];
+
+  // Remove active sessions for this user
+  for (const [token, session] of activeSessions) {
+    if (session.username === key) activeSessions.delete(token);
+  }
+
+  await saveUsersToSheets().catch(() => {});
+  res.json({ ok: true, message: `User "${key}" deleted` });
 });
 
 // --------------- Status Update (Replied/Rejected) ---------------
@@ -1008,6 +1185,7 @@ app.listen(PORT, async () => {
   // Load data from Google Sheets on startup
   if (SPREADSHEET_ID) {
     console.log('[Sheets] Loading saved data...');
+    await loadUsersFromSheets().catch(err => console.error('[Sheets] Users load error:', err.message));
     await loadFromSheets().catch(err => console.error('[Sheets] Load error:', err.message));
     await loadConfigFromSheets().catch(err => console.error('[Sheets] Config load error:', err.message));
   }

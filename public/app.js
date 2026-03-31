@@ -68,6 +68,14 @@ function showApp(user) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('logged-in-user').textContent = user.name || user.username;
+
+  // Show admin button for admins
+  if (user.role === 'admin') {
+    document.getElementById('btn-admin').classList.remove('hidden');
+  } else {
+    document.getElementById('btn-admin').classList.add('hidden');
+  }
+
   initApp();
 }
 
@@ -805,6 +813,135 @@ async function submitReply(thingId, btn) {
 
   btn.disabled = false;
   btn.textContent = 'Post Reply';
+}
+
+// --------------- Admin Panel ---------------
+function openAdmin() {
+  document.getElementById('admin-overlay').classList.remove('hidden');
+  document.getElementById('admin-modal').classList.remove('hidden');
+  loadUsers();
+}
+
+function closeAdmin() {
+  document.getElementById('admin-overlay').classList.add('hidden');
+  document.getElementById('admin-modal').classList.add('hidden');
+}
+
+async function loadUsers() {
+  const list = document.getElementById('admin-user-list');
+  list.innerHTML = '<p style="color:var(--text-muted); font-size:13px;">Loading...</p>';
+
+  try {
+    const res = await fetch(`${API}/api/users`, { headers: getHeaders() });
+    const data = await res.json();
+
+    if (!data.users || data.users.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-muted);">No users found.</p>';
+      return;
+    }
+
+    list.innerHTML = data.users.map(u => `
+      <div class="user-row">
+        <div class="user-info">
+          <div class="user-name">${escapeHtml(u.name)}</div>
+          <div class="user-detail">@${escapeHtml(u.username)}</div>
+        </div>
+        <span class="role-badge ${u.role}">${escapeHtml(u.role)}</span>
+        <button class="btn btn-small btn-secondary" onclick="editUser('${escapeHtml(u.username)}')">Edit</button>
+        <button class="btn btn-small btn-danger" onclick="deleteUser('${escapeHtml(u.username)}')">Remove</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = '<p style="color:var(--red);">Error loading users</p>';
+  }
+}
+
+async function addUser() {
+  const name = document.getElementById('new-user-name').value.trim();
+  const username = document.getElementById('new-user-username').value.trim();
+  const password = document.getElementById('new-user-password').value;
+  const role = document.getElementById('new-user-role').value;
+
+  if (!username || !password) {
+    showToast('Username and password required', true);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/api/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ username, password, role, name: name || username }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(data.message || 'User created');
+      document.getElementById('new-user-name').value = '';
+      document.getElementById('new-user-username').value = '';
+      document.getElementById('new-user-password').value = '';
+      loadUsers();
+    } else {
+      showToast(data.error || 'Failed to create user', true);
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function editUser(username) {
+  const newPassword = prompt(`Enter new password for "${username}" (leave blank to keep current):`);
+  if (newPassword === null) return; // cancelled
+
+  const newRole = prompt(`Role for "${username}"? Type "admin" or "user":`, 'user');
+  if (newRole === null) return;
+
+  const newName = prompt(`Display name for "${username}":`, username);
+  if (newName === null) return;
+
+  const body = {};
+  if (newPassword) body.password = newPassword;
+  if (newRole) body.role = newRole;
+  if (newName) body.name = newName;
+
+  try {
+    const res = await fetch(`${API}/api/users/${username}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(data.message || 'User updated');
+      loadUsers();
+    } else {
+      showToast(data.error || 'Failed to update', true);
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Remove team member "${username}"? They will lose access immediately.`)) return;
+
+  try {
+    const res = await fetch(`${API}/api/users/${username}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(data.message || 'User removed');
+      loadUsers();
+    } else {
+      showToast(data.error || 'Failed to remove', true);
+    }
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
 }
 
 // --------------- Helpers ---------------

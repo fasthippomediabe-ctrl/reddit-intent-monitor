@@ -58,6 +58,7 @@
         <button id="btn-settings" class="btn btn-brand">Settings</button>
         <div class="user-menu">
           <span id="logged-in-user" class="meta"></span>
+          <button id="btn-admin" class="btn btn-small btn-secondary hidden" onclick="openAdmin()">Manage Users</button>
           <button id="btn-logout" class="btn btn-small btn-secondary" onclick="handleLogout()">Logout</button>
         </div>
       </div>
@@ -265,6 +266,35 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Admin Panel Modal -->
+  <div id="admin-overlay" class="overlay hidden" onclick="closeAdmin()"></div>
+  <div id="admin-modal" class="modal hidden" style="width:600px;">
+    <div class="modal-header">
+      <h2>Manage Team Members</h2>
+      <button onclick="closeAdmin()" class="btn-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Add User Form -->
+      <div style="background:var(--bg-input); padding:16px; border-radius:8px; margin-bottom:20px;">
+        <h3 style="font-size:14px; margin-bottom:12px; color:var(--text);">Add New Team Member</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <input type="text" id="new-user-name" class="input-field" placeholder="Display Name">
+          <input type="text" id="new-user-username" class="input-field" placeholder="Username (login)">
+          <input type="text" id="new-user-password" class="input-field" placeholder="Password">
+          <select id="new-user-role" class="input-field">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button class="btn btn-brand btn-full" style="margin-top:10px;" onclick="addUser()">Add Team Member</button>
+      </div>
+
+      <!-- User List -->
+      <h3 style="font-size:14px; margin-bottom:10px; color:var(--text);">Current Team Members</h3>
+      <div id="admin-user-list"></div>
+    </div>
   </div>
 
   <!-- Toast -->
