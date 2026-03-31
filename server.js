@@ -546,10 +546,7 @@ function stopPolling() {
 // --------------- Team Login & User Management ---------------
 
 // Default users (fallback if Sheets not available)
-const DEFAULT_USERS = {
-  boss: { password: 'leadfinder123', role: 'admin', name: 'Boss' },
-  bryan: { password: 'bryan2024', role: 'admin', name: 'Bryan' },
-};
+const DEFAULT_USERS = {};
 
 // Dynamic users loaded from Google Sheets
 let teamUsers = { ...DEFAULT_USERS };
