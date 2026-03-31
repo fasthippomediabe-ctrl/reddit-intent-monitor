@@ -1170,6 +1170,10 @@ app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
+app.get('/admin', (req, res) => {
+  res.sendFile('admin.html', { root: 'public' });
+});
+
 app.get('*', (req, res) => {
   res.sendFile('index.html', { root: 'public' });
 });
