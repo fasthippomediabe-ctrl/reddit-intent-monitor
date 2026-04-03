@@ -141,11 +141,23 @@
     <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:24px;">
       <h3 style="font-size:14px; margin-bottom:8px; color:var(--fhm-blue);">How it works</h3>
       <ul style="font-size:13px; color:var(--text-muted); padding-left:18px; line-height:1.8;">
-        <li>Users added here can log into <strong>all 3 apps</strong>: Reddit Monitor, Lead Finder, GBP Audit</li>
-        <li><strong>Admin</strong> role can access this user management page</li>
-        <li><strong>User</strong> role can only use the tools, not manage users</li>
+        <li>This page controls access for <strong>all Fast Hippo Media tools</strong></li>
+        <li><strong>Admin</strong> role — can manage users and access all apps</li>
+        <li><strong>User</strong> role — can only use the apps assigned to them</li>
+        <li><strong>Apps access</strong> controls which tools each user can log into:
+          <ul style="margin-top:4px;">
+            <li><code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">all</code> — access to everything</li>
+            <li><code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">reddit</code> — Reddit Lead Monitor</li>
+            <li><code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">leadfinder</code> — Lead Finder</li>
+            <li><code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">gbpaudit</code> — GBP Competitive Audit</li>
+            <li><code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">admin</code> — User Management page</li>
+          </ul>
+        </li>
+        <li>Combine with commas: <code style="background:var(--bg-elevated); padding:1px 6px; border-radius:3px;">leadfinder,gbpaudit</code></li>
         <li>Changes take effect within 5 minutes across all apps</li>
         <li>User data is stored in Google Sheets (hidden "Users" tab)</li>
+        <li>To <strong>edit</strong> a user, click Edit and follow the prompts</li>
+        <li>To <strong>remove</strong> a user, click Remove — they lose access immediately</li>
       </ul>
     </div>
 
