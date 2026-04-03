@@ -125,7 +125,9 @@
           <option value="user">User</option>
           <option value="admin">Admin</option>
         </select>
+        <input type="text" id="new-apps" class="input-field" placeholder="Apps access (e.g. all, or: reddit,leadfinder,gbpaudit)" value="leadfinder,gbpaudit" style="grid-column:1/-1;">
       </div>
+      <p style="font-size:11px; color:var(--text-muted); margin-top:6px;">Apps: <b>all</b> = all apps, or comma-separated: <b>reddit</b>, <b>leadfinder</b>, <b>gbpaudit</b>, <b>admin</b></p>
       <button class="btn btn-brand" style="margin-top:12px;" onclick="addUser()">Add Team Member</button>
     </div>
 
@@ -183,7 +185,7 @@
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, app: 'admin' }),
       });
       const data = await res.json();
 
@@ -238,7 +240,8 @@
             <div class="user-detail">@${esc(u.username)}</div>
           </div>
           <span class="role-badge ${u.role}">${esc(u.role)}</span>
-          <button class="btn btn-small btn-secondary" onclick="editUser('${esc(u.username)}')">Edit</button>
+          <span style="font-size:10px; color:var(--text-muted); padding:2px 8px; background:var(--bg-input); border-radius:6px;">${esc(u.apps || 'all')}</span>
+          <button class="btn btn-small btn-secondary" onclick="editUser('${esc(u.username)}', '${esc(u.apps || 'all')}')">Edit</button>
           <button class="btn btn-small btn-danger" onclick="deleteUser('${esc(u.username)}')">Remove</button>
         </div>
       `).join('');
@@ -249,13 +252,14 @@
       const username = document.getElementById('new-username').value.trim();
       const password = document.getElementById('new-password').value;
       const role = document.getElementById('new-role').value;
+      const apps = document.getElementById('new-apps').value.trim() || 'all';
 
       if (!username || !password) { showToast('Username and password required', true); return; }
 
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ username, password, role, name: name || username }),
+        body: JSON.stringify({ username, password, role, name: name || username, apps }),
       });
       const data = await res.json();
 
@@ -270,18 +274,21 @@
       }
     }
 
-    async function editUser(username) {
+    async function editUser(username, currentApps) {
       const pw = prompt(`New password for "${username}" (blank = keep current):`);
       if (pw === null) return;
       const role = prompt(`Role for "${username}"? (admin or user):`, 'user');
       if (role === null) return;
       const name = prompt(`Display name for "${username}":`, username);
       if (name === null) return;
+      const apps = prompt(`App access for "${username}"?\n(all = everything, or comma-separated: reddit,leadfinder,gbpaudit,admin):`, currentApps || 'all');
+      if (apps === null) return;
 
       const body = {};
       if (pw) body.password = pw;
       if (role) body.role = role;
       if (name) body.name = name;
+      if (apps) body.apps = apps;
 
       const res = await fetch(`/api/users/${username}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(body) });
       const data = await res.json();

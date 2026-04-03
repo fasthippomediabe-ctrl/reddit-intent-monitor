@@ -25,7 +25,7 @@ async function handleLogin(e) {
     const res = await fetch(`${API}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, app: 'reddit' }),
     });
     const data = await res.json();
 

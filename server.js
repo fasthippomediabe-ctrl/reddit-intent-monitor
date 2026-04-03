@@ -616,7 +616,7 @@ async function loadUsersFromSheets() {
         spreadsheetId: SPREADSHEET_ID,
         range: 'Users!A1:D1',
         valueInputOption: 'RAW',
-        requestBody: { values: [['Username', 'Password', 'Role', 'Name']] },
+        requestBody: { values: [['Username', 'Password', 'Role', 'Name', 'Apps']] },
       });
       // Add default users
       const defaultRows = Object.entries(DEFAULT_USERS).map(([username, u]) => [username, u.password, u.role, u.name]);
@@ -640,12 +640,13 @@ async function loadUsersFromSheets() {
 
     const loaded = {};
     for (let i = 1; i < rows.length; i++) {
-      const [username, password, role, name] = rows[i];
+      const [username, password, role, name, apps] = rows[i];
       if (username && password) {
         loaded[username.toLowerCase().trim()] = {
           password,
           role: role || 'user',
           name: name || username,
+          apps: apps || 'all',
         };
       }
     }
@@ -665,9 +666,9 @@ async function saveUsersToSheets() {
   if (!sheets) return;
 
   try {
-    const rows = [['Username', 'Password', 'Role', 'Name']];
+    const rows = [['Username', 'Password', 'Role', 'Name', 'Apps']];
     for (const [username, u] of Object.entries(teamUsers)) {
-      rows.push([username, u.password, u.role, u.name]);
+      rows.push([username, u.password, u.role, u.name, u.apps || 'all']);
     }
 
     // Clear and rewrite
@@ -710,15 +711,23 @@ function adminMiddleware(req, res, next) {
 }
 
 app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, app: appName } = req.body;
   const user = teamUsers[username?.toLowerCase()?.trim()];
 
   if (!user || user.password !== password) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
+  // Check app access (if apps field exists)
+  if (user.apps && appName) {
+    const allowedApps = user.apps.split(',').map(a => a.trim().toLowerCase());
+    if (!allowedApps.includes('all') && !allowedApps.includes(appName.toLowerCase())) {
+      return res.status(403).json({ error: 'You do not have access to this app. Contact your admin.' });
+    }
+  }
+
   const token = generateToken();
-  activeSessions.set(token, { username: username.toLowerCase().trim(), role: user.role, name: user.name });
+  activeSessions.set(token, { username: username.toLowerCase().trim(), role: user.role, name: user.name, apps: user.apps || 'all' });
 
   res.json({ ok: true, token, username: username.toLowerCase().trim(), role: user.role, name: user.name });
 });
@@ -745,12 +754,13 @@ app.get('/api/users', authMiddleware, adminMiddleware, (req, res) => {
     username,
     role: u.role,
     name: u.name,
+    apps: u.apps || 'all',
   }));
   res.json({ users });
 });
 
 app.post('/api/users', authMiddleware, adminMiddleware, async (req, res) => {
-  const { username, password, role, name } = req.body;
+  const { username, password, role, name, apps } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
@@ -765,6 +775,7 @@ app.post('/api/users', authMiddleware, adminMiddleware, async (req, res) => {
     password,
     role: role || 'user',
     name: name || username,
+    apps: apps || 'all',
   };
 
   await saveUsersToSheets().catch(() => {});
@@ -777,10 +788,11 @@ app.put('/api/users/:username', authMiddleware, adminMiddleware, async (req, res
     return res.status(404).json({ error: 'User not found' });
   }
 
-  const { password, role, name } = req.body;
+  const { password, role, name, apps } = req.body;
   if (password) teamUsers[key].password = password;
   if (role) teamUsers[key].role = role;
   if (name) teamUsers[key].name = name;
+  if (apps !== undefined) teamUsers[key].apps = apps;
 
   await saveUsersToSheets().catch(() => {});
   res.json({ ok: true, message: `User "${key}" updated` });
